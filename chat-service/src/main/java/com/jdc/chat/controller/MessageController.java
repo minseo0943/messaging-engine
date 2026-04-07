@@ -1,7 +1,6 @@
 package com.jdc.chat.controller;
 
-import com.jdc.chat.domain.dto.MessageResponse;
-import com.jdc.chat.domain.dto.SendMessageRequest;
+import com.jdc.chat.domain.dto.*;
 import com.jdc.chat.service.MessageService;
 import com.jdc.common.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -54,6 +53,38 @@ public class MessageController {
                                            @PathVariable Long messageId,
                                            @RequestParam Long userId) {
         messageService.deleteMessage(roomId, messageId, userId);
+        return ApiResponse.ok();
+    }
+
+    @Operation(summary = "메시지 수정", description = "본인이 보낸 메시지의 내용을 수정합니다")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "메시지 수정 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "본인 메시지가 아님"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "메시지 또는 채팅방 없음")
+    })
+    @PatchMapping("/{messageId}")
+    public ApiResponse<MessageResponse> editMessage(@PathVariable Long roomId,
+                                                    @PathVariable Long messageId,
+                                                    @Valid @RequestBody EditMessageRequest request) {
+        return ApiResponse.ok(messageService.editMessage(roomId, messageId, request));
+    }
+
+    @Operation(summary = "리액션 추가", description = "메시지에 이모지 리액션을 추가합니다")
+    @PostMapping("/{messageId}/reactions")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<ReactionResponse> addReaction(@PathVariable Long roomId,
+                                                     @PathVariable Long messageId,
+                                                     @Valid @RequestBody ReactionRequest request) {
+        return ApiResponse.ok(messageService.addReaction(roomId, messageId, request));
+    }
+
+    @Operation(summary = "리액션 제거", description = "메시지에서 이모지 리액션을 제거합니다")
+    @DeleteMapping("/{messageId}/reactions")
+    public ApiResponse<Void> removeReaction(@PathVariable Long roomId,
+                                            @PathVariable Long messageId,
+                                            @RequestParam Long userId,
+                                            @RequestParam String emoji) {
+        messageService.removeReaction(roomId, messageId, userId, emoji);
         return ApiResponse.ok();
     }
 }

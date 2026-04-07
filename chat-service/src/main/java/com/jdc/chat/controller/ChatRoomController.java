@@ -2,7 +2,7 @@ package com.jdc.chat.controller;
 
 import com.jdc.chat.domain.dto.ChatRoomResponse;
 import com.jdc.chat.domain.dto.CreateChatRoomRequest;
-import com.jdc.chat.domain.dto.JoinChatRoomRequest;
+import com.jdc.chat.domain.dto.InviteRequest;
 import com.jdc.chat.domain.dto.MarkAsReadRequest;
 import com.jdc.chat.service.ChatRoomService;
 import com.jdc.chat.service.ReadReceiptService;
@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @Tag(name = "ChatRoom", description = "채팅방 관리 API")
 @RestController
@@ -38,10 +39,12 @@ public class ChatRoomController {
         return ApiResponse.ok(chatRoomService.createChatRoom(request));
     }
 
-    @Operation(summary = "채팅방 목록 조회", description = "모든 채팅방 목록을 조회합니다")
+    @Operation(summary = "내 채팅방 목록", description = "해당 사용자가 참여 중인 채팅방만 조회합니다 (카카오톡 모델)")
     @GetMapping
-    public ApiResponse<List<ChatRoomResponse>> getAllChatRooms() {
-        return ApiResponse.ok(chatRoomService.getAllChatRooms());
+    public ApiResponse<List<ChatRoomResponse>> getMyChatRooms(
+            @Parameter(description = "사용자 ID", required = true)
+            @RequestParam Long userId) {
+        return ApiResponse.ok(chatRoomService.getMyChatRooms(userId));
     }
 
     @Operation(summary = "채팅방 상세 조회", description = "특정 채팅방의 상세 정보를 조회합니다")
@@ -50,12 +53,17 @@ public class ChatRoomController {
         return ApiResponse.ok(chatRoomService.getChatRoom(roomId));
     }
 
-    @Operation(summary = "채팅방 참여", description = "채팅방에 새로운 멤버로 참여합니다")
-    @PostMapping("/{roomId}/join")
-    public ApiResponse<Void> joinChatRoom(@PathVariable Long roomId,
-                                          @Valid @RequestBody JoinChatRoomRequest request) {
-        chatRoomService.joinChatRoom(roomId, request);
-        return ApiResponse.ok();
+    @Operation(summary = "채팅방 초대", description = "기존 멤버가 다른 사용자를 채팅방에 초대합니다")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "초대 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "멤버가 아닌 사용자가 초대 시도"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "채팅방 없음")
+    })
+    @PostMapping("/{roomId}/invite")
+    public ApiResponse<Map<String, Object>> inviteMembers(@PathVariable Long roomId,
+                                                          @Valid @RequestBody InviteRequest request) {
+        List<Long> invitedIds = chatRoomService.inviteMembers(roomId, request);
+        return ApiResponse.ok(Map.of("roomId", roomId, "invitedUserIds", invitedIds));
     }
 
     @Operation(summary = "채팅방 나가기", description = "채팅방에서 나갑니다")

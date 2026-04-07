@@ -1,6 +1,5 @@
 package com.jdc.gateway.config;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.retry.Retry;
@@ -24,6 +23,7 @@ public class ResilienceConfig {
                 .waitDurationInOpenState(Duration.ofSeconds(10))
                 .permittedNumberOfCallsInHalfOpenState(3)
                 .minimumNumberOfCalls(5)
+                .ignoreExceptions(org.springframework.web.client.HttpClientErrorException.class)
                 .build();
 
         return CircuitBreakerRegistry.of(config);

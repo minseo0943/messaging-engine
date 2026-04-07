@@ -17,6 +17,8 @@ public record MessageResponse(
         String replyToContent,
         String replyToSender,
         MessageStatus status,
+        boolean edited,
+        LocalDateTime editedAt,
         LocalDateTime createdAt
 ) {
     public static MessageResponse from(Message message) {
@@ -31,6 +33,8 @@ public record MessageResponse(
                 message.getReplyToContent(),
                 message.getReplyToSender(),
                 message.getStatus(),
+                message.isEdited(),
+                message.getEditedAt(),
                 message.getCreatedAt()
         );
     }

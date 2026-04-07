@@ -49,12 +49,22 @@ jobs:
       - name: Run unit tests
         run: ./gradlew test --no-daemon
 
+      - name: Generate JaCoCo coverage report
+        run: ./gradlew jacocoTestReport --no-daemon
+
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: test-results
           path: '**/build/test-results/test/*.xml'
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-reports
+          path: '**/build/reports/jacoco/test/html/'
 
       - name: Upload JAR artifacts
         uses: actions/upload-artifact@v4
@@ -168,3 +178,18 @@ jobs:
 
       - name: Compile check (all modules)
         run: ./gradlew compileJava compileTestJava --no-daemon
+
+  # ──────────────── Dependency Security Scan ────────────────
+  security-scan:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4

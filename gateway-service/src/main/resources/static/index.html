@@ -190,9 +190,23 @@
         <h3>새 채팅방</h3>
         <input type="text" id="new-room-name" placeholder="채팅방 이름">
         <input type="text" id="new-room-desc" placeholder="설명 (선택)">
+        <input type="text" id="new-room-members" placeholder="초대할 닉네임 (쉼표 구분, 예: 홍길동,김철수)">
+        <div style="font-size:11px;color:#555;margin:-6px 0 8px 2px;">닉네임을 입력하면 자동으로 초대됩니다</div>
         <div class="modal-actions">
             <button class="btn-secondary" onclick="hideModal()">취소</button>
             <button class="btn-primary" onclick="createRoom()">만들기</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="invite-modal">
+    <div class="modal">
+        <h3>멤버 초대</h3>
+        <input type="text" id="invite-members" placeholder="초대할 닉네임 (쉼표 구분)">
+        <div style="font-size:11px;color:#555;margin:-6px 0 8px 2px;">닉네임을 입력하면 자동으로 초대됩니다</div>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="hideInviteModal()">취소</button>
+            <button class="btn-primary" onclick="inviteMembers()">초대하기</button>
         </div>
     </div>
 </div>
@@ -286,6 +300,12 @@
             stompClient.send('/app/presence',{},JSON.stringify({userId,username,status:'ONLINE'}));
             if(currentRoomId)subRoom(currentRoomId);
             if(allRooms.length>0)subAllRooms(allRooms);
+            // 개인 초대 알림 구독 — 초대 시 방 목록 자동 갱신
+            stompClient.subscribe(`/topic/user/${userId}/invite`,f=>{
+                const d=JSON.parse(f.body);
+                toast('새 채팅방에 초대되었습니다!','success');
+                loadRooms();
+            });
         },()=>{setWsStatus(false);globalRoomSubs={};setTimeout(connectWs,3000)});
         sock.onclose=()=>setWsStatus(false);
     }
@@ -305,12 +325,15 @@
         if(deleteSub)deleteSub.unsubscribe();
         roomSub=stompClient.subscribe(`/topic/rooms/${roomId}/messages`,f=>{
             const msg=JSON.parse(f.body);
+            // 시스템 메시지 (초대/나가기)
+            if(msg.type==='SYSTEM'||msg.senderId===0){
+                appendMessage(msg);loadRooms();return;
+            }
             if(msg.senderId===userId&&sentMsgKeys.has(msg.content)){sentMsgKeys.delete(msg.content);return}
             if(msg.senderId!==userId){
                 appendMessage(msg);
                 playNotifSound();
                 showBrowserNotif(msg.senderName,msg.content);
-                // 현재 방이면 자동 읽음 처리
                 if(msg.id)markAsReadSingle(roomId,msg.id);
             }
         });
@@ -413,13 +436,30 @@
 
     async function createRoom(){
         const name=document.getElementById('new-room-name').value.trim(),desc=document.getElementById('new-room-desc').value.trim();
+        const membersInput=document.getElementById('new-room-members').value.trim();
         if(!name)return;
+        const memberIds=membersInput?membersInput.split(',').map(n=>nameToId(n.trim())).filter(id=>id!==userId):[];
         try{
-            const res=await api('POST','/api/chat/rooms',{name,description:desc||null,creatorId:userId});
-            hideModal();document.getElementById('new-room-name').value='';document.getElementById('new-room-desc').value='';
-            toast('"'+name+'" 생성됨','success');loadRooms();enterRoom(res.data);
-        }catch(e){toast('생�� 실패','error')}
+            const res=await api('POST','/api/chat/rooms',{name,description:desc||null,creatorId:userId,memberIds:memberIds.length>0?memberIds:null});
+            hideModal();document.getElementById('new-room-name').value='';document.getElementById('new-room-desc').value='';document.getElementById('new-room-members').value='';
+            toast('"'+name+'" 생성됨'+(memberIds.length>0?' ('+memberIds.length+'명 초대)':''),'success');loadRooms();enterRoom(res.data);
+        }catch(e){toast('생성 실패','error')}
     }
+
+    function showInviteModal(){document.getElementById('invite-modal').classList.add('show');document.getElementById('invite-members').focus()}
+    function hideInviteModal(){document.getElementById('invite-modal').classList.remove('show');document.getElementById('invite-members').value=''}
+
+    async function inviteMembers(){
+        const input=document.getElementById('invite-members').value.trim();
+        if(!input||!currentRoomId)return;
+        const userIds=input.split(',').map(n=>nameToId(n.trim())).filter(id=>id!==userId);
+        if(userIds.length===0){toast('초대할 닉네임을 입력하세요','error');return}
+        try{
+            await api('POST',`/api/chat/rooms/${currentRoomId}/invite`,{inviterId:userId,userIds});
+            hideInviteModal();toast(userIds.length+'명 초대됨','success');loadRooms();
+        }catch(e){toast('초대 실패','error')}
+    }
+
 
     // ─── Enter/Leave Room ���──
     async function enterRoom(room){
@@ -430,7 +470,6 @@
         document.querySelectorAll('.room-item').forEach(el=>{
             el.classList.toggle('active',parseInt(el.dataset.roomId)===room.id);
         });
-        try{await api('POST',`/api/chat/rooms/${room.id}/join`,{userId,nickname:username})}catch(e){if(e.status===404){toast('채팅방 없음','error');return}}
         totalSent=0;avgLatency=0;sentMsgKeys.clear();replyTarget=null;
         renderChatArea(room);loadInitialMessages(room.id);subRoom(room.id);
         // 읽음 처리
@@ -470,6 +509,7 @@
                     <div class="chat-meta">${room.description||''} · 멤버 ${room.memberCount}명</div>
                 </div>
                 <div class="chat-header-right">
+                    <button class="header-btn" onclick="showInviteModal()">+ 초대</button>
                     <button class="header-btn" onclick="leaveRoom()">나가기</button>
                 </div>
             </div>
@@ -542,6 +582,17 @@
 
     function appendMessage(msg){
         const c=document.getElementById('messages');if(!c)return;
+
+        // 시스템 메시지 (초대/나가기)
+        if(msg.type==='SYSTEM'||msg.senderId===0){
+            const sys=document.createElement('div');
+            sys.style.cssText='text-align:center;padding:8px 0;font-size:12px;color:#888;';
+            sys.textContent=msg.content||'';
+            c.appendChild(sys);
+            c.scrollTop=c.scrollHeight;
+            return;
+        }
+
         const mine=msg.senderId===userId;
         const isDeleted=msg.status==='DELETED';
         const isSpam=msg.spamStatus==='SPAM';

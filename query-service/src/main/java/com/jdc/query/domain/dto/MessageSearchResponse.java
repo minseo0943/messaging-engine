@@ -8,6 +8,7 @@ public record MessageSearchResponse(
         Long senderId,
         String senderName,
         String content,
+        String highlightedContent,
         Instant createdAt,
         float score
 ) {

@@ -94,6 +94,14 @@ management:
     tracing:
       endpoint: http://${JAEGER_HOST:jaeger}:4318/v1/traces
 
+# MinIO (Docker profile에서만 활성화)
+minio:
+  enabled: ${MINIO_ENABLED:false}
+  endpoint: http://${MINIO_HOST:minio}:${MINIO_PORT:9000}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin}
+  bucket: ${MINIO_BUCKET:chat-files}
+
 logging:
   level:
     com.jdc.chat: INFO

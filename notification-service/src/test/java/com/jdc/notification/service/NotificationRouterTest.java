@@ -22,7 +22,7 @@ class NotificationRouterTest {
         NotificationSender sender1 = mock(NotificationSender.class);
         NotificationSender sender2 = mock(NotificationSender.class);
         given(sender1.getChannel()).willReturn(NotificationChannel.SLACK);
-        given(sender2.getChannel()).willReturn(NotificationChannel.FCM);
+        given(sender2.getChannel()).willReturn(NotificationChannel.SLACK);
 
         NotificationRouter router = new NotificationRouter(List.of(sender1, sender2));
         NotificationMessage message = new NotificationMessage(1L, 100L, "TestUser", "Hello");
@@ -42,7 +42,7 @@ class NotificationRouterTest {
         NotificationSender failSender = mock(NotificationSender.class);
         NotificationSender okSender = mock(NotificationSender.class);
         given(failSender.getChannel()).willReturn(NotificationChannel.SLACK);
-        given(okSender.getChannel()).willReturn(NotificationChannel.FCM);
+        given(okSender.getChannel()).willReturn(NotificationChannel.SLACK);
         willThrow(new RuntimeException("Slack down")).given(failSender).send(any());
 
         NotificationRouter router = new NotificationRouter(List.of(failSender, okSender));

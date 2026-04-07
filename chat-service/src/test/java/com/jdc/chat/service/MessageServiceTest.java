@@ -41,6 +41,9 @@ class MessageServiceTest {
     private ChatRoomRepository chatRoomRepository;
 
     @Mock
+    private com.jdc.chat.domain.repository.MessageReactionRepository messageReactionRepository;
+
+    @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
 
     @Mock

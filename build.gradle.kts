@@ -18,6 +18,7 @@ allprojects {
 subprojects {
     apply(plugin = "java")
     apply(plugin = "io.spring.dependency-management")
+    apply(plugin = "jacoco")
 
     java {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -41,5 +42,23 @@ subprojects {
 
     tasks.withType<Test> {
         useJUnitPlatform()
+        finalizedBy(tasks.named("jacocoTestReport"))
+    }
+
+    tasks.withType<JacocoReport> {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+    }
+
+    tasks.withType<JacocoCoverageVerification> {
+        violationRules {
+            rule {
+                limit {
+                    minimum = "0.60".toBigDecimal()
+                }
+            }
+        }
     }
 }

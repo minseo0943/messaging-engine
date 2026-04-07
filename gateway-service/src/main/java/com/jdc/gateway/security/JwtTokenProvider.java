@@ -18,8 +18,11 @@ public class JwtTokenProvider {
     @Value("${jwt.secret}")
     private String secret;
 
-    @Value("${jwt.expiration-ms:3600000}")
-    private long expirationMs;
+    @Value("${jwt.access-token-expiration-ms:900000}")
+    private long accessTokenExpirationMs;
+
+    @Value("${jwt.refresh-token-expiration-ms:604800000}")
+    private long refreshTokenExpirationMs;
 
     private SecretKey secretKey;
 
@@ -28,17 +31,36 @@ public class JwtTokenProvider {
         this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generateToken(Long userId, String username) {
+    public String generateAccessToken(Long userId, String username) {
+        return buildToken(userId, username, accessTokenExpirationMs, "access");
+    }
+
+    public String generateRefreshToken(Long userId, String username) {
+        return buildToken(userId, username, refreshTokenExpirationMs, "refresh");
+    }
+
+    public long getRefreshTokenExpirationMs() {
+        return refreshTokenExpirationMs;
+    }
+
+    private String buildToken(Long userId, String username, long expirationMs, String tokenType) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
 
         return Jwts.builder()
                 .subject(String.valueOf(userId))
                 .claim("username", username)
+                .claim("type", tokenType)
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(secretKey)
                 .compact();
+    }
+
+    /** @deprecated 하위 호환용. generateAccessToken 사용 권장 */
+    @Deprecated
+    public String generateToken(Long userId, String username) {
+        return generateAccessToken(userId, username);
     }
 
     public boolean validateToken(String token) {
@@ -51,6 +73,17 @@ public class JwtTokenProvider {
             log.warn("유효하지 않은 JWT 토큰: {}", e.getMessage());
         }
         return false;
+    }
+
+    public boolean isExpired(String token) {
+        try {
+            Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token);
+            return false;
+        } catch (ExpiredJwtException e) {
+            return true;
+        } catch (JwtException e) {
+            return false;
+        }
     }
 
     public Claims getClaims(String token) {

@@ -1,6 +1,7 @@
 package com.jdc.query.consumer;
 
 import com.jdc.common.event.MessageSentEvent;
+import com.jdc.query.domain.repository.MessageDocumentRepository;
 import com.jdc.query.service.MessageProjectionService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,13 +22,16 @@ class MessageEventConsumerTest {
     private MessageProjectionService projectionService;
 
     @Mock
+    private MessageDocumentRepository messageDocumentRepository;
+
+    @Mock
     private Acknowledgment ack;
 
     private MessageEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new MessageEventConsumer(projectionService, new SimpleMeterRegistry());
+        consumer = new MessageEventConsumer(projectionService, messageDocumentRepository, new SimpleMeterRegistry());
     }
 
     @Test

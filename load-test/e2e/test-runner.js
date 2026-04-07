@@ -115,12 +115,13 @@ async function run() {
         else fail('채팅방 생성 유효성', `expected 400, got ${r.status}`);
     } catch (e) { fail('채팅방 유효성', e.message); }
 
-    // 전체 조회
+    // 내 채팅방 목록 조회 (카카오톡 모델 — 참여 중인 방만)
     try {
-        const r = await api('GET', '/api/chat/rooms');
-        if (r.status === 200 && Array.isArray(r.data.data)) pass('채팅방 목록 조회');
-        else fail('채팅방 목록 조회', `status=${r.status}`);
-    } catch (e) { fail('채팅방 목록', e.message); }
+        const r = await api('GET', `/api/chat/rooms?userId=${userA.id}`);
+        if (r.status === 200 && Array.isArray(r.data.data) && r.data.data.some(room => room.id === roomId))
+            pass('내 채팅방 목록 조회');
+        else fail('내 채팅방 목록 조회', `status=${r.status}`);
+    } catch (e) { fail('내 채팅방 목록', e.message); }
 
     // 상세 조회
     try {
@@ -136,21 +137,22 @@ async function run() {
         else fail('채팅방 404', `expected 404, got ${r.status}`);
     } catch (e) { fail('채팅방 404', e.message); }
 
-    // 입장 (creatorId는 이미 멤버이므로 409 허용, B만 신규 입장)
+    // 초대 (creator가 userB를 초대)
     try {
-        const ra = await api('POST', `/api/chat/rooms/${roomId}/join`, { userId: userA.id, nickname: userA.name });
-        const rb = await api('POST', `/api/chat/rooms/${roomId}/join`, { userId: userB.id, nickname: userB.name });
-        const aOk = ra.status === 200 || ra.status === 409; // creator는 이미 멤버일 수 있음
-        if (aOk && rb.status === 200) pass('채팅방 입장 (creator 중복 허용, B 신규)');
-        else fail('채팅방 입장', `A=${ra.status} B=${rb.status}`);
-    } catch (e) { fail('채팅방 입장', e.message); }
+        const r = await api('POST', `/api/chat/rooms/${roomId}/invite`, {
+            inviterId: userA.id, userIds: [userB.id]
+        });
+        if (r.status === 200) pass('채팅방 초대 (A가 B 초대)');
+        else fail('채팅방 초대', `status=${r.status}`);
+    } catch (e) { fail('채팅방 초대', e.message); }
 
-    // 중복 입장
+    // 초대된 사용자가 방 목록에 보이는지 확인
     try {
-        const r = await api('POST', `/api/chat/rooms/${roomId}/join`, { userId: userB.id, nickname: userB.name });
-        if (r.status === 400 || r.status === 409) pass('중복 입장 → 에러');
-        else fail('중복 입장', `expected 400/409, got ${r.status}`);
-    } catch (e) { fail('중복 입장', e.message); }
+        const r = await api('GET', `/api/chat/rooms?userId=${userB.id}`);
+        const found = (r.data.data || []).some(room => room.id === roomId);
+        if (r.status === 200 && found) pass('초대 후 B의 채팅방 목록에 표시');
+        else fail('초대 후 목록', JSON.stringify(r.data));
+    } catch (e) { fail('초대 후 목록', e.message); }
 
     // ═══════════════════════════════════════
     // SECTION 3: WebSocket 연결 + 구독
@@ -426,6 +428,15 @@ async function run() {
         if (r.status === 200) pass('채팅방 나가기');
         else fail('채팅방 나가기', `status=${r.status}`);
     } catch (e) { fail('채팅방 나가기', e.message); }
+
+    // 나간 후 내 채팅방 목록에서 사라지는지 확인
+    try {
+        const r = await api('GET', `/api/chat/rooms?userId=${userB.id}`);
+        const myRooms = r.data.data || [];
+        const found = myRooms.some(room => room.id === roomId);
+        if (r.status === 200 && !found) pass('나간 후 채팅방 목록에서 제거 확인');
+        else fail('나간 후 목록 제거', `room still in list: ${JSON.stringify(myRooms.map(r => r.id))}`);
+    } catch (e) { fail('나간 후 목록 제거', e.message); }
 
     // 나간 후 메시지 전송 → 에러
     try {

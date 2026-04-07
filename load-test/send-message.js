@@ -39,14 +39,14 @@ export function setup() {
 
   const roomId = createRoomRes.json('data.id');
 
-  // 테스트용 멤버 50명 등록
-  for (let i = 2; i <= 50; i++) {
-    http.post(
-      `${BASE_URL}/api/chat/rooms/${roomId}/join`,
-      JSON.stringify({ userId: i, nickname: `user-${i}` }),
-      { headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+  // 테스트용 멤버 50명 초대
+  const memberIds = [];
+  for (let i = 2; i <= 50; i++) memberIds.push(i);
+  http.post(
+    `${BASE_URL}/api/chat/rooms/${roomId}/invite`,
+    JSON.stringify({ inviterId: 1, userIds: memberIds }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
 
   return { roomId };
 }

@@ -21,6 +21,9 @@ public enum ErrorCode {
     MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "M001", "메시지를 찾을 수 없습니다"),
     MESSAGE_DELETE_FORBIDDEN(HttpStatus.FORBIDDEN, "M002", "본인이 보낸 메시지만 삭제할 수 있습니다"),
     MESSAGE_ALREADY_DELETED(HttpStatus.BAD_REQUEST, "M003", "이미 삭제된 메시지입니다"),
+    MESSAGE_EDIT_FORBIDDEN(HttpStatus.FORBIDDEN, "M004", "본인이 보낸 메시지만 수정할 수 있습니다"),
+    DUPLICATE_REACTION(HttpStatus.CONFLICT, "M005", "이미 동일한 리액션이 존재합니다"),
+    REACTION_NOT_FOUND(HttpStatus.NOT_FOUND, "M006", "리액션을 찾을 수 없습니다"),
 
     // User
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "U001", "사용자를 찾을 수 없습니다");
