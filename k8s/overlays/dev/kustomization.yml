@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: dev-
+
+patches:
+  # Dev 환경: ES 활성화, 트레이싱 활성화
+  - target:
+      kind: ConfigMap
+      name: messaging-config
+    patch: |
+      - op: replace
+        path: /data/ES_ENABLED
+        value: "true"
+      - op: replace
+        path: /data/TRACING_ENABLED
+        value: "true"
+
+  # Gateway: replicas 2 (HA)
+  - target:
+      kind: Deployment
+      name: gateway-service
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+  # Chat-service: replicas 2 (쓰기 부하 분산)
+  - target:
+      kind: Deployment
+      name: chat-service
+    patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 2
+
+images:
+  - name: ghcr.io/messaging-engine/gateway-service
+    newTag: dev
+  - name: ghcr.io/messaging-engine/chat-service
+    newTag: dev
+  - name: ghcr.io/messaging-engine/query-service
+    newTag: dev
+  - name: ghcr.io/messaging-engine/presence-service
+    newTag: dev
+  - name: ghcr.io/messaging-engine/notification-service
+    newTag: dev
+  - name: ghcr.io/messaging-engine/ai-service
+    newTag: dev

@@ -1,0 +1,88 @@
+spring:
+  application:
+    name: gateway-service
+  profiles:
+    active: local
+
+server:
+  port: 8080
+
+# JWT
+jwt:
+  secret: ${JWT_SECRET:messaging-engine-jwt-secret-key-must-be-at-least-32-bytes-long}
+  expiration-ms: 3600000  # 1시간
+
+# Gateway
+gateway:
+  rate-limit:
+    max-requests: 300
+    window-seconds: 60
+  services:
+    chat-service: ${CHAT_SERVICE_URL:http://localhost:8081}
+    query-service: ${QUERY_SERVICE_URL:http://localhost:8082}
+    presence-service: ${PRESENCE_SERVICE_URL:http://localhost:8083}
+    ai-service: ${AI_SERVICE_URL:http://localhost:8085}
+
+# Swagger
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+    enabled: false
+
+---
+# Local Profile
+spring:
+  config:
+    activate:
+      on-profile: local
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    com.jdc.gateway: DEBUG
+
+---
+# Docker Profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+  data:
+    redis:
+      host: ${REDIS_HOST:redis}
+      port: ${REDIS_PORT:6379}
+
+gateway:
+  services:
+    chat-service: http://${CHAT_SERVICE_HOST:chat-service}:8081
+    query-service: http://${QUERY_SERVICE_HOST:query-service}:8082
+    presence-service: http://${PRESENCE_SERVICE_HOST:presence-service}:8083
+    ai-service: http://${AI_SERVICE_HOST:ai-service}:8085
+
+management:
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://${JAEGER_HOST:jaeger}:4318/v1/traces
+
+logging:
+  level:
+    com.jdc.gateway: INFO

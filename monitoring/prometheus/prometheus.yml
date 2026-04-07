@@ -1,0 +1,49 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+rule_files:
+  - "alert-rules.yml"
+
+scrape_configs:
+  - job_name: 'gateway-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['gateway-service:8080']
+        labels:
+          service: 'gateway-service'
+
+  - job_name: 'chat-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['chat-service:8081']
+        labels:
+          service: 'chat-service'
+
+  - job_name: 'query-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['query-service:8082']
+        labels:
+          service: 'query-service'
+
+  - job_name: 'presence-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['presence-service:8083']
+        labels:
+          service: 'presence-service'
+
+  - job_name: 'notification-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['notification-service:8084']
+        labels:
+          service: 'notification-service'
+
+  - job_name: 'ai-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['ai-service:8085']
+        labels:
+          service: 'ai-service'

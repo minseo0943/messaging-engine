@@ -1,0 +1,89 @@
+spring:
+  application:
+    name: notification-service
+  profiles:
+    active: local
+
+server:
+  port: 8084
+
+# Swagger
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 1.0
+    enabled: false
+
+# Notification
+notification:
+  slack:
+    enabled: false
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+
+---
+# Local Profile (Kafka 비활성화)
+spring:
+  config:
+    activate:
+      on-profile: local
+  kafka:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+logging:
+  level:
+    com.jdc.notification: DEBUG
+
+---
+# Docker Profile (Kafka 활성화)
+spring:
+  config:
+    activate:
+      on-profile: docker
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    consumer:
+      group-id: notification-service
+
+management:
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://${JAEGER_HOST:jaeger}:4318/v1/traces
+
+notification:
+  slack:
+    enabled: ${SLACK_ENABLED:false}
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+
+logging:
+  level:
+    com.jdc.notification: INFO
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+  kafka:
+    enabled: false
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration

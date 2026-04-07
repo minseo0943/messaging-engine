@@ -1,0 +1,109 @@
+spring:
+  application:
+    name: query-service
+  profiles:
+    active: local
+
+server:
+  port: 8082
+
+# Swagger
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  health:
+    elasticsearch:
+      enabled: ${ES_ENABLED:false}
+  tracing:
+    sampling:
+      probability: 1.0
+    enabled: false
+
+# Elasticsearch (기본 비활성화)
+spring.elasticsearch.enabled: false
+
+---
+# Local Profile (Embedded MongoDB 없이, Kafka 비활성화)
+spring:
+  config:
+    activate:
+      on-profile: local
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/query_db
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchRepositoriesAutoConfiguration
+  kafka:
+    enabled: false
+
+logging:
+  level:
+    com.jdc.query: DEBUG
+
+---
+# Docker Profile (MongoDB + Kafka + optional ES)
+spring:
+  config:
+    activate:
+      on-profile: docker
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USERNAME:mongo_user}:${MONGO_PASSWORD:mongo_pass}@${MONGO_HOST:mongodb}:${MONGO_PORT:27017}/query_db?authSource=admin
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    consumer:
+      group-id: query-service-projection
+  elasticsearch:
+    uris: http://${ES_HOST:elasticsearch}:${ES_PORT:9200}
+  autoconfigure:
+    exclude: ${SPRING_AUTOCONFIGURE_EXCLUDE:}
+
+spring.elasticsearch.enabled: ${ES_ENABLED:false}
+
+management:
+  tracing:
+    enabled: ${TRACING_ENABLED:false}
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://${JAEGER_HOST:jaeger}:4318/v1/traces
+
+logging:
+  level:
+    com.jdc.query: INFO
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/test_query_db
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchRestClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchDataAutoConfiguration
+      - org.springframework.boot.autoconfigure.elasticsearch.ElasticsearchClientAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.elasticsearch.ElasticsearchRepositoriesAutoConfiguration
+  kafka:
+    enabled: false

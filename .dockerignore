@@ -1,0 +1,16 @@
+.git
+.github
+.gradle
+.idea
+.claude
+docs
+load-test
+monitoring
+k8s
+**/build/classes
+**/build/generated
+**/build/reports
+**/build/resources
+**/build/tmp
+**/out
+*.md

@@ -1,0 +1,138 @@
+groups:
+  # ──────────────── 서비스 가용성 ────────────────
+  - name: service_availability
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~".*-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} 서비스 다운"
+          description: "{{ $labels.job }}이 1분 이상 응답하지 않습니다."
+
+      - alert: HighRestartRate
+        expr: increase(process_uptime_seconds{job=~".*-service"}[10m]) < 300
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} 빈번한 재시작 감지"
+          description: "{{ $labels.job }}이 10분 내에 재시작된 것으로 보입니다."
+
+  # ──────────────── HTTP 에러율 ────────────────
+  - name: http_errors
+    rules:
+      - alert: HighErrorRate5xx
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job=~".*-service", status=~"5.."}[5m])) by (job)
+            /
+            sum(rate(http_server_requests_seconds_count{job=~".*-service"}[5m])) by (job)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} 5xx 에러율 5% 초과"
+          description: "{{ $labels.job }}의 5xx 에러율이 {{ $value | humanizePercentage }}입니다."
+
+      - alert: HighErrorRate4xx
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{job=~".*-service", status=~"4.."}[5m])) by (job)
+            /
+            sum(rate(http_server_requests_seconds_count{job=~".*-service"}[5m])) by (job)
+          ) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} 4xx 에러율 20% 초과"
+          description: "{{ $labels.job }}의 4xx 에러율이 {{ $value | humanizePercentage }}입니다."
+
+  # ──────────────── HTTP 레이턴시 ────────────────
+  - name: http_latency
+    rules:
+      - alert: HighP99Latency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{job=~".*-service"}[5m])) by (le, job)
+          ) > 2.0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} p99 레이턴시 2초 초과"
+          description: "{{ $labels.job }}의 p99 응답시간이 {{ $value | humanizeDuration }}입니다."
+
+      - alert: HighP99Latency_Critical
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{job=~".*-service"}[5m])) by (le, job)
+          ) > 5.0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} p99 레이턴시 5초 초과"
+          description: "{{ $labels.job }}의 p99 응답시간이 {{ $value | humanizeDuration }}입니다."
+
+  # ──────────────── Kafka Consumer ────────────────
+  - name: kafka_consumer
+    rules:
+      - alert: KafkaConsumerLagHigh
+        expr: |
+          sum(kafka_consumer_fetch_manager_records_lag_max{job=~".*-service"}) by (job, topic) > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} Kafka consumer lag 1000건 초과"
+          description: "{{ $labels.job }}의 {{ $labels.topic }} 토픽 lag: {{ $value }}건"
+
+      - alert: KafkaConsumerLagCritical
+        expr: |
+          sum(kafka_consumer_fetch_manager_records_lag_max{job=~".*-service"}) by (job, topic) > 10000
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} Kafka consumer lag 10000건 초과"
+          description: "{{ $labels.job }}의 {{ $labels.topic }} 토픽 lag: {{ $value }}건. Consumer가 멈췄을 수 있습니다."
+
+      - alert: KafkaEventProcessingSlowP99
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(messaging_event_end_to_end_lag_seconds_bucket[5m])) by (le, topic)
+          ) > 10
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.topic }} 이벤트 E2E 처리 지연 10초 초과"
+          description: "{{ $labels.topic }} 토픽의 p99 E2E lag: {{ $value | humanizeDuration }}"
+
+  # ──────────────── JVM / 리소스 ────────────────
+  - name: jvm_resources
+    rules:
+      - alert: HighJvmHeapUsage
+        expr: |
+          (jvm_memory_used_bytes{area="heap", job=~".*-service"}
+            / jvm_memory_max_bytes{area="heap", job=~".*-service"}) > 0.90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} JVM 힙 사용률 90% 초과"
+          description: "{{ $labels.job }}의 힙 사용률: {{ $value | humanizePercentage }}. OOM 위험."
+
+      - alert: HikariCPConnectionPoolExhausted
+        expr: |
+          hikaricp_connections_pending{job=~".*-service"} > 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} HikariCP 커넥션 풀 대기 발생"
+          description: "{{ $labels.job }}에서 DB 커넥션 대기가 3분 이상 지속 중입니다."
