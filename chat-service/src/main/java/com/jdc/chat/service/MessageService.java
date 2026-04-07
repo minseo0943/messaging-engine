@@ -1,13 +1,13 @@
 package com.jdc.chat.service;
 
-import com.jdc.chat.domain.dto.MessageResponse;
-import com.jdc.chat.domain.dto.SendMessageRequest;
-import com.jdc.chat.domain.entity.ChatRoom;
-import com.jdc.chat.domain.entity.Message;
-import com.jdc.chat.domain.entity.MessageStatus;
+import com.jdc.chat.domain.dto.*;
+import com.jdc.chat.domain.entity.*;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
+import com.jdc.chat.domain.repository.MessageReactionRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.common.event.MessageEditedEvent;
+import com.jdc.common.event.MessageReactionEvent;
 import com.jdc.common.event.MessageSentEvent;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MessageService {
 
     private final MessageRepository messageRepository;
+    private final MessageReactionRepository messageReactionRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -116,6 +117,93 @@ public class MessageService {
 
         return messageRepository.findByChatRoomIdOrderByCreatedAtDesc(roomId, pageable)
                 .map(MessageResponse::from);
+    }
+
+    @Transactional
+    public MessageResponse editMessage(Long roomId, Long messageId, EditMessageRequest request) {
+        if (!chatRoomRepository.existsById(roomId)) {
+            throw new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND);
+        }
+
+        Message message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new CustomException(ErrorCode.MESSAGE_NOT_FOUND));
+
+        if (!message.getSenderId().equals(request.senderId())) {
+            throw new CustomException(ErrorCode.MESSAGE_EDIT_FORBIDDEN);
+        }
+
+        if (message.getStatus() == MessageStatus.DELETED) {
+            throw new CustomException(ErrorCode.MESSAGE_ALREADY_DELETED);
+        }
+
+        message.edit(request.content());
+
+        eventPublisher.publishEvent(new MessageEditedEvent(
+                message.getId(),
+                message.getChatRoom().getId(),
+                request.senderId(),
+                request.content()
+        ));
+
+        log.info("메시지 수정 완료 [messageId={}, roomId={}, senderId={}]",
+                messageId, roomId, request.senderId());
+
+        return MessageResponse.from(message);
+    }
+
+    @Transactional
+    public ReactionResponse addReaction(Long roomId, Long messageId, ReactionRequest request) {
+        if (!chatRoomRepository.existsById(roomId)) {
+            throw new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND);
+        }
+
+        if (!messageRepository.existsById(messageId)) {
+            throw new CustomException(ErrorCode.MESSAGE_NOT_FOUND);
+        }
+
+        if (messageReactionRepository.existsByMessageIdAndUserIdAndEmoji(
+                messageId, request.userId(), request.emoji())) {
+            throw new CustomException(ErrorCode.DUPLICATE_REACTION);
+        }
+
+        MessageReaction reaction = MessageReaction.builder()
+                .messageId(messageId)
+                .userId(request.userId())
+                .emoji(request.emoji())
+                .build();
+
+        messageReactionRepository.save(reaction);
+
+        eventPublisher.publishEvent(new MessageReactionEvent(
+                messageId, roomId, request.userId(), request.emoji(),
+                MessageReactionEvent.ActionType.ADDED
+        ));
+
+        log.info("리액션 추가 [messageId={}, userId={}, emoji={}]",
+                messageId, request.userId(), request.emoji());
+
+        return ReactionResponse.from(reaction);
+    }
+
+    @Transactional
+    public void removeReaction(Long roomId, Long messageId, Long userId, String emoji) {
+        if (!chatRoomRepository.existsById(roomId)) {
+            throw new CustomException(ErrorCode.CHAT_ROOM_NOT_FOUND);
+        }
+
+        MessageReaction reaction = messageReactionRepository
+                .findByMessageIdAndUserIdAndEmoji(messageId, userId, emoji)
+                .orElseThrow(() -> new CustomException(ErrorCode.REACTION_NOT_FOUND));
+
+        messageReactionRepository.delete(reaction);
+
+        eventPublisher.publishEvent(new MessageReactionEvent(
+                messageId, roomId, userId, emoji,
+                MessageReactionEvent.ActionType.REMOVED
+        ));
+
+        log.info("리액션 제거 [messageId={}, userId={}, emoji={}]",
+                messageId, userId, emoji);
     }
 
     private String truncate(String text, int maxLength) {

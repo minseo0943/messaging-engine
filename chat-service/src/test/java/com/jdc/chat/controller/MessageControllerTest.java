@@ -46,7 +46,7 @@ class MessageControllerTest {
         SendMessageRequest request = new SendMessageRequest(1L, "User1", "Hello", MessageType.TEXT, null);
         MessageResponse response = new MessageResponse(
                 1L, 100L, 1L, "User1", "Hello", MessageType.TEXT,
-                null, null, null, MessageStatus.ACTIVE, LocalDateTime.now());
+                null, null, null, MessageStatus.ACTIVE, false, null, LocalDateTime.now());
         given(messageService.sendMessage(eq(100L), any(SendMessageRequest.class))).willReturn(response);
 
         // When & Then
@@ -78,7 +78,7 @@ class MessageControllerTest {
         // Given
         MessageResponse msg = new MessageResponse(
                 1L, 100L, 1L, "User1", "Hello", MessageType.TEXT,
-                null, null, null, MessageStatus.ACTIVE, LocalDateTime.now());
+                null, null, null, MessageStatus.ACTIVE, false, null, LocalDateTime.now());
         Page<MessageResponse> page = new PageImpl<>(List.of(msg), PageRequest.of(0, 20), 1);
         given(messageService.getMessages(eq(100L), any())).willReturn(page);
 

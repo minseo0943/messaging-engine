@@ -51,6 +51,12 @@ public class Message {
     @Column(nullable = false, length = 20)
     private MessageStatus status;
 
+    @Column(nullable = false)
+    private boolean edited;
+
+    @Column
+    private LocalDateTime editedAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -67,11 +73,18 @@ public class Message {
         this.replyToContent = replyToContent;
         this.replyToSender = replyToSender;
         this.status = MessageStatus.ACTIVE;
+        this.edited = false;
         this.createdAt = LocalDateTime.now();
     }
 
     public void delete() {
         this.status = MessageStatus.DELETED;
         this.content = "삭제된 메시지입니다";
+    }
+
+    public void edit(String newContent) {
+        this.content = newContent;
+        this.edited = true;
+        this.editedAt = LocalDateTime.now();
     }
 }
