@@ -16,7 +16,8 @@ class JwtTokenProviderTest {
         jwtTokenProvider = new JwtTokenProvider();
         ReflectionTestUtils.setField(jwtTokenProvider, "secret",
                 "messaging-engine-jwt-secret-key-must-be-at-least-32-bytes-long");
-        ReflectionTestUtils.setField(jwtTokenProvider, "expirationMs", 3600000L);
+        ReflectionTestUtils.setField(jwtTokenProvider, "accessTokenExpirationMs", 900000L);
+        ReflectionTestUtils.setField(jwtTokenProvider, "refreshTokenExpirationMs", 604800000L);
         jwtTokenProvider.init();
     }
 
@@ -82,7 +83,8 @@ class JwtTokenProviderTest {
         JwtTokenProvider expiredProvider = new JwtTokenProvider();
         ReflectionTestUtils.setField(expiredProvider, "secret",
                 "messaging-engine-jwt-secret-key-must-be-at-least-32-bytes-long");
-        ReflectionTestUtils.setField(expiredProvider, "expirationMs", -1000L);
+        ReflectionTestUtils.setField(expiredProvider, "accessTokenExpirationMs", -1000L);
+        ReflectionTestUtils.setField(expiredProvider, "refreshTokenExpirationMs", -1000L);
         expiredProvider.init();
 
         String token = expiredProvider.generateToken(1L, "testuser");
