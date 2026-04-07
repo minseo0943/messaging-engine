@@ -142,15 +142,15 @@ async function run() {
     if (roomGet.data?.data?.id === roomId) pass('채팅방 조회');
     else fail('채팅방 조회', JSON.stringify(roomGet.data));
 
-    // 채팅방 목록
-    const roomList = await gw('GET', '/api/chat/rooms');
-    if (roomList.data?.data && roomList.data.data.length > 0) pass('채팅방 목록 조회');
-    else fail('채팅방 목록 조회', JSON.stringify(roomList.data));
+    // 내 채팅방 목록 (참여 중인 방만)
+    const roomList = await gw('GET', `/api/chat/rooms?userId=${userA.id}`);
+    if (roomList.data?.data && roomList.data.data.some(r => r.id === roomId)) pass('내 채팅방 목록 조회');
+    else fail('내 채팅방 목록 조회', JSON.stringify(roomList.data));
 
-    // UserB 입장 (nickname 필드 필수)
-    const joinRes = await gw('POST', `/api/chat/rooms/${roomId}/join`, { userId: userB.id, nickname: userB.name });
-    if (joinRes.status < 300) pass('UserB 채팅방 입장');
-    else fail('UserB 채팅방 입장', `status=${joinRes.status} ${JSON.stringify(joinRes.data)}`);
+    // UserA가 UserB 초대
+    const inviteRes = await gw('POST', `/api/chat/rooms/${roomId}/invite`, { inviterId: userA.id, userIds: [userB.id] });
+    if (inviteRes.status < 300) pass('UserB 채팅방 초대');
+    else fail('UserB 채팅방 초대', `status=${inviteRes.status} ${JSON.stringify(inviteRes.data)}`);
 
     // ═══════════════════════════════════════
     // Phase C: Message CRUD + Reply + Delete

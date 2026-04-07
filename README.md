@@ -10,8 +10,8 @@ Client (Swagger UI / K6 / E2E Test)
     ▼
 ┌──────────────────────────────────────────────────────────┐
 │  Gateway Service (:8080)                                 │
-│  JWT Auth │ Rate Limiting │ Circuit Breaker │ Retry      │
-│                  Resilience4j (서비스별 격리)               │
+│  OAuth2/JWT │ Rate Limiting │ Circuit Breaker │ Retry     │
+│     Refresh Token Rotation │ Resilience4j (서비스별 격리)   │
 └────────────┬─────────────────────────────────────────────┘
              │
     ┌────────┼────────┬──────────┬──────────┐
@@ -21,7 +21,9 @@ Client (Swagger UI / K6 / E2E Test)
 │:8081   ││:8082   ││ :8083    ││ :8084  ││ :8085  │
 │ MySQL  ││MongoDB ││  Redis   ││ Slack  ││Strategy│
 │(Write) ││(Read)  ││Graceful  ││        ││Pattern │
-│        ││        ││Degradtn. ││        ││Rule Eng│
+│ Edit   ││ES Auto ││Degradtn. ││        ││Rule Eng│
+│Reaction││complete││        ││          ││        │
+│ MinIO  ││Aggregtn││          ││        ││        │
 └───┬────┘└────────┘└──────────┘└────────┘└───┬────┘
     │         ▲                     ▲          │
     │   Kafka │    message.sent     │          │
@@ -40,9 +42,16 @@ Client (Swagger UI / K6 / E2E Test)
 1. `POST /api/chat/rooms/{id}/messages` → chat-service (MySQL 저장)
 2. `@TransactionalEventListener` → Kafka `message.sent` 발행
 3. query-service Consumer → MongoDB 프로젝션 + Elasticsearch 인덱싱
-4. notification-service Consumer → Slack/FCM/Email 알림 발송
+4. notification-service Consumer → Slack Webhook 알림 발송
 5. ai-service Consumer → 스팸 탐지 + 우선순위 분류
 6. `GET /api/query/rooms/{id}/messages` → query-service (MongoDB 조회)
+
+### 메시지 수정 & 리액션 Flow
+
+1. `PATCH /api/chat/rooms/{id}/messages/{msgId}` → 본인 확인 후 수정
+2. Kafka `message.edited` → query-service가 MongoDB 도큐먼트 업데이트
+3. `POST /api/chat/rooms/{id}/messages/{msgId}/reactions` → 이모지 리액션
+4. Kafka `message.reaction` → query-service가 reactions 배열 갱신
 
 ## Tech Stack
 
@@ -56,7 +65,8 @@ Client (Swagger UI / K6 / E2E Test)
 | Cache/Presence | Redis 7.2 |
 | Search | Elasticsearch 8.12 + Nori 한글 형태소 분석기 |
 | Resilience | Resilience4j (Circuit Breaker + Retry) |
-| Auth | JWT (JJWT 0.12.6) |
+| Auth | JWT + OAuth2 Kakao + Refresh Token Rotation |
+| File Storage | MinIO (S3 호환) + Presigned URL |
 | Tracing | Micrometer Tracing + OpenTelemetry → Jaeger |
 | Metrics | Micrometer → Prometheus → Grafana |
 | Load Test | K6 |
@@ -72,12 +82,12 @@ messaging-engine/
 ├── chat-service/            # CQRS Command Side (MySQL → Kafka)
 ├── query-service/           # CQRS Query Side (Kafka → MongoDB + ES)
 ├── presence-service/        # Redis 접속 상태 관리
-├── notification-service/    # 알림 라우팅 (Slack, FCM, Email)
+├── notification-service/    # 알림 라우팅 (Slack Webhook)
 ├── ai-service/              # 스팸 탐지 (Strategy 패턴 규칙 엔진)
 ├── load-test/               # K6 부하 테스트 스크립트
 ├── monitoring/              # Prometheus + Grafana 설정
 ├── docs/                    # ADR, 벤치마크, 트러블슈팅
-│   ├── adr/                 # Architecture Decision Records (11건)
+│   ├── adr/                 # Architecture Decision Records (14건)
 │   ├── benchmarks/          # Phase별 성능 측정 결과
 │   └── implementation-plan.md
 └── .github/workflows/       # CI Pipeline
@@ -186,6 +196,9 @@ k6 run load-test/send-message.js
 | 009 | Strategy 패턴 스팸 탐지 | OCP 준수, 규칙 추가 시 기존 코드 수정 없음 |
 | 010 | 테스트 피라미드 전략 | 크리티컬 경로 기반 리스크 분석, 레벨별 역할 분담 |
 | 011 | Kafka 수동 ACK | at-least-once 보장, DLT와 안전한 조합 |
+| 012 | OAuth2 + Refresh Token Rotation | 토큰 탈취 대응, 세션 보안 |
+| 013 | Presigned URL 파일 업로드 | 서버 부하 제거, S3 호환 |
+| 014 | ES Edge N-gram 자동완성 | 한글 특성 고려, bool query 결합 |
 
 ## Custom Metrics
 
@@ -240,6 +253,75 @@ SpamDetectionService
 ContentFilterProperties (@ConfigurationProperties)
   └── application.yml에서 패턴/임계값 재배포 없이 변경 가능
 ```
+
+## OAuth2 + Refresh Token
+
+```
+POST /api/auth/token           → Access Token(15분) + Refresh Token(7일) 발급
+POST /api/auth/refresh         → Refresh Token으로 새 토큰 쌍 발급 (Rotation)
+POST /api/auth/logout          → Refresh Token 폐기
+GET  /api/auth/kakao/url       → Kakao OAuth2 인증 URL
+GET  /api/auth/kakao/callback  → Authorization Code → JWT 쌍 발급
+```
+
+**Refresh Token Rotation**: 갱신 시 이전 토큰은 폐기. 폐기된 토큰이 재사용되면 **전체 무효화** (탈취 탐지)
+
+## File Upload (MinIO Presigned URL)
+
+```
+POST /api/chat/files/upload-url   → Presigned PUT URL 발급 (10분)
+GET  /api/chat/files/download-url → Presigned GET URL 발급 (1시간)
+```
+
+서버를 거치지 않는 **직접 업로드** 방식. MinIO(S3 호환) 사용.
+
+## Search (Elasticsearch)
+
+```
+GET /api/query/search?keyword=회의&chatRoomId=1&senderId=2&from=...&to=...
+GET /api/query/search/suggest?q=회&chatRoomId=1&size=5
+```
+
+- **Edge N-gram 자동완성**: 타이핑 중 실시간 제안
+- **하이라이팅**: `<em>키워드</em>` 매칭 강조
+- **복합 필터**: 발신자, 날짜 범위, 채팅방
+
+## Analytics (MongoDB Aggregation)
+
+```
+GET /api/query/analytics/rooms/{chatRoomId}  → 채팅방 통계
+GET /api/query/analytics/users/{userId}      → 사용자 활동
+```
+
+- 총 메시지, 활성 사용자, 피크 시간대, 일평균 메시지
+- 사용자별 Top 5 활발한 채팅방
+
+## Chat Room Model (KakaoTalk-style)
+
+카카오톡과 동일한 **초대 기반 멤버십 모델**:
+
+- 채팅방은 생성자가 만들고, 멤버를 초대해야만 접근 가능
+- `GET /api/chat/rooms?userId=N` → 본인이 멤버인 채팅방만 반환
+- Gateway가 JWT에서 userId를 자동 주입 (클라이언트는 토큰만 보내면 됨)
+- 초대/나가기 시 시스템 메시지 자동 생성 + WebSocket 실시간 알림
+
+```
+POST /api/chat/rooms                        → 채팅방 생성 (+ 초기 멤버 초대)
+POST /api/chat/rooms/{roomId}/invite        → 멤버 초대
+DELETE /api/chat/rooms/{roomId}/members/{id} → 나가기
+```
+
+## Performance Test Results
+
+K6 부하 테스트 결과 (Docker Compose 단일 노드):
+
+| VU | 평균 | p50 | p95 | 에러율 | 판정 |
+|----|------|-----|-----|--------|------|
+| 30 | 2.07s | 936ms | 8.69s | 1.46% | PASS |
+| 50 | 4.01s | 3.76s | 10.04s | 3.93% | PASS (경고) |
+| 100 | 9.91s | 6.97s | 26.38s | 7.35% | FAIL |
+
+상세 분석: [docs/performance/phase4-results.md](docs/performance/phase4-results.md)
 
 ## Troubleshooting
 
