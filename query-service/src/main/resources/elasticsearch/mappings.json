@@ -7,7 +7,14 @@
     "content": {
       "type": "text",
       "analyzer": "nori_analyzer",
-      "search_analyzer": "nori_analyzer"
+      "search_analyzer": "nori_analyzer",
+      "fields": {
+        "autocomplete": {
+          "type": "text",
+          "analyzer": "autocomplete_analyzer",
+          "search_analyzer": "autocomplete_search_analyzer"
+        }
+      }
     },
     "createdAt": { "type": "date", "format": "epoch_millis" }
   }
