@@ -26,6 +26,9 @@ dependencies {
     // Swagger
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:$springdocVersion")
 
+    // MinIO (S3-compatible storage)
+    implementation("io.minio:minio:8.5.7")
+
     // DB
     runtimeOnly("com.mysql:mysql-connector-j")
     runtimeOnly("com.h2database:h2")
