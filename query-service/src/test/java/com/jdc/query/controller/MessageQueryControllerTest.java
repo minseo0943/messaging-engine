@@ -34,7 +34,7 @@ class MessageQueryControllerTest {
     void getMessages_shouldReturnPagedMessages() throws Exception {
         // Given
         MessageQueryResponse msg = new MessageQueryResponse(
-                1L, 100L, 1L, "User1", "Hello", "TEXT", Instant.now(), "CLEAN", null, null);
+                1L, 100L, 1L, "User1", "Hello", "TEXT", false, null, List.of(), Instant.now(), "CLEAN", null, null);
         Page<MessageQueryResponse> page = new PageImpl<>(List.of(msg), PageRequest.of(0, 20), 1);
         given(messageQueryService.getMessagesByRoom(eq(100L), any())).willReturn(page);
 

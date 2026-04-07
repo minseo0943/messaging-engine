@@ -2,11 +2,12 @@ package com.jdc.chat.service;
 
 import com.jdc.chat.domain.dto.ChatRoomResponse;
 import com.jdc.chat.domain.dto.CreateChatRoomRequest;
-import com.jdc.chat.domain.dto.JoinChatRoomRequest;
+import com.jdc.chat.domain.dto.InviteRequest;
 import com.jdc.chat.domain.entity.ChatRoom;
 import com.jdc.chat.domain.entity.ChatRoomMember;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
+import com.jdc.chat.domain.repository.MessageRepository;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -34,6 +35,9 @@ class ChatRoomServiceTest {
     @Mock
     private ChatRoomMemberRepository chatRoomMemberRepository;
 
+    @Mock
+    private MessageRepository messageRepository;
+
     @InjectMocks
     private ChatRoomService chatRoomService;
 
@@ -41,7 +45,7 @@ class ChatRoomServiceTest {
     @DisplayName("채팅방 생성 시 생성자가 첫 번째 멤버로 자동 추가되는 테스트")
     void createChatRoom_shouldAddCreatorAsMember() {
         // Given
-        CreateChatRoomRequest request = new CreateChatRoomRequest("개발팀", "개발팀 채팅방", 1L);
+        CreateChatRoomRequest request = new CreateChatRoomRequest("개발팀", "개발팀 채팅방", 1L, null);
         given(chatRoomRepository.save(any(ChatRoom.class))).willAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -57,21 +61,21 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    @DisplayName("이미 참여한 채팅방에 재참여 시 ALREADY_JOINED 예외가 발생하는 테스트")
-    void joinChatRoom_shouldThrow_whenAlreadyJoined() {
+    @DisplayName("멤버가 아닌 사용자가 초대 시 NOT_A_MEMBER 예외가 발생하는 테스트")
+    void inviteMembers_shouldThrow_whenInviterNotMember() {
         // Given
         Long roomId = 1L;
-        JoinChatRoomRequest request = new JoinChatRoomRequest(100L, "testuser");
+        InviteRequest request = new InviteRequest(100L, java.util.List.of(200L));
         ChatRoom chatRoom = ChatRoom.builder().name("테스트방").description("설명").creatorId(1L).build();
 
         given(chatRoomRepository.findById(roomId)).willReturn(Optional.of(chatRoom));
-        given(chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, 100L)).willReturn(true);
+        given(chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, 100L)).willReturn(false);
 
         // When & Then
-        assertThatThrownBy(() -> chatRoomService.joinChatRoom(roomId, request))
+        assertThatThrownBy(() -> chatRoomService.inviteMembers(roomId, request))
                 .isInstanceOf(CustomException.class)
                 .satisfies(ex -> assertThat(((CustomException) ex).getErrorCode())
-                        .isEqualTo(ErrorCode.ALREADY_JOINED));
+                        .isEqualTo(ErrorCode.NOT_A_MEMBER));
     }
 
     @Test

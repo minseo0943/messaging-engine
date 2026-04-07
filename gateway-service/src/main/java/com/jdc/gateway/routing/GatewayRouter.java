@@ -38,6 +38,10 @@ public class GatewayRouter {
             Pattern.compile("^/api/chat/rooms/(\\d+)/messages$");
     private static final Pattern MESSAGE_DELETE_PATTERN =
             Pattern.compile("^/api/chat/rooms/(\\d+)/messages/(\\d+)$");
+    private static final Pattern INVITE_PATTERN =
+            Pattern.compile("^/api/chat/rooms/(\\d+)/invite$");
+    private static final Pattern LEAVE_PATTERN =
+            Pattern.compile("^/api/chat/rooms/(\\d+)/members/(\\d+)$");
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, String> serviceUrls;
@@ -88,6 +92,15 @@ public class GatewayRouter {
         }
 
         String targetUrl = serviceUrls.get(route.getServiceName()) + path;
+
+        // JWT에서 추출한 userId를 채팅방 목록 요청에 자동 주입 (카카오톡 모델)
+        Object jwtUserId = request.getAttribute("userId");
+        if (jwtUserId != null && "GET".equals(request.getMethod())
+                && path.equals("/api/chat/rooms")
+                && (queryString == null || !queryString.contains("userId="))) {
+            queryString = (queryString != null ? queryString + "&" : "") + "userId=" + jwtUserId;
+        }
+
         if (queryString != null) {
             targetUrl += "?" + queryString;
         }
@@ -129,12 +142,14 @@ public class GatewayRouter {
                     .tag("status", String.valueOf(proxyResponse.getStatusCode().value()))
                     .register(meterRegistry));
 
-            // WebSocket broadcast: 메시지 전송/삭제 성공 시 해당 채팅방에 실시간 push
+            // WebSocket broadcast: 메시지 전송/삭제/초대/나가기 성공 시 해당 채팅방에 실시간 push
             if (proxyResponse.getStatusCode().is2xxSuccessful()) {
                 if ("POST".equals(request.getMethod())) {
                     broadcastIfMessageSend(path, responseBody);
+                    broadcastIfInvite(path, responseBody);
                 } else if ("DELETE".equals(request.getMethod())) {
                     broadcastIfMessageDelete(path);
+                    broadcastIfLeave(path);
                 }
             }
 
@@ -219,6 +234,58 @@ public class GatewayRouter {
             broadcaster.broadcastMessageDelete(chatRoomId, messageId);
         } catch (Exception e) {
             log.warn("WebSocket delete broadcast 실패: {}", e.getMessage());
+        }
+    }
+
+    private void broadcastIfInvite(String path, byte[] responseBody) {
+        Matcher matcher = INVITE_PATTERN.matcher(path);
+        if (!matcher.matches() || responseBody == null) return;
+
+        try {
+            Long chatRoomId = Long.parseLong(matcher.group(1));
+            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode data = root.get("data");
+            if (data == null) return;
+
+            // 채팅방 시스템 메시지 broadcast (기존 멤버에게)
+            Map<String, Object> sysMsg = new HashMap<>();
+            sysMsg.put("type", "SYSTEM");
+            sysMsg.put("senderId", 0);
+            sysMsg.put("senderName", "시스템");
+            sysMsg.put("content", "새로운 멤버가 초대되었습니다");
+            sysMsg.put("chatRoomId", chatRoomId);
+            broadcaster.broadcastRoomEvent(chatRoomId, sysMsg);
+
+            // 초대된 사용자들에게 개인 알림 (방 목록 갱신용)
+            JsonNode invitedIds = data.get("invitedUserIds");
+            if (invitedIds != null && invitedIds.isArray()) {
+                for (JsonNode idNode : invitedIds) {
+                    broadcaster.notifyUserInvited(idNode.asLong(),
+                            Map.of("roomId", chatRoomId, "action", "INVITED"));
+                }
+            }
+        } catch (Exception e) {
+            log.warn("WebSocket invite broadcast 실패: {}", e.getMessage());
+        }
+    }
+
+    private void broadcastIfLeave(String path) {
+        Matcher matcher = LEAVE_PATTERN.matcher(path);
+        if (!matcher.matches()) return;
+
+        try {
+            Long chatRoomId = Long.parseLong(matcher.group(1));
+
+            // 남은 멤버들에게 시스템 메시지 broadcast
+            Map<String, Object> sysMsg = new HashMap<>();
+            sysMsg.put("type", "SYSTEM");
+            sysMsg.put("senderId", 0);
+            sysMsg.put("senderName", "시스템");
+            sysMsg.put("content", "멤버가 채팅방을 나갔습니다");
+            sysMsg.put("chatRoomId", chatRoomId);
+            broadcaster.broadcastRoomEvent(chatRoomId, sysMsg);
+        } catch (Exception e) {
+            log.warn("WebSocket leave broadcast 실패: {}", e.getMessage());
         }
     }
 }

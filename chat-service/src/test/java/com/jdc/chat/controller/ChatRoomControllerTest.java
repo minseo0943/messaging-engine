@@ -3,7 +3,7 @@ package com.jdc.chat.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jdc.chat.domain.dto.ChatRoomResponse;
 import com.jdc.chat.domain.dto.CreateChatRoomRequest;
-import com.jdc.chat.domain.dto.JoinChatRoomRequest;
+import com.jdc.chat.domain.dto.InviteRequest;
 import com.jdc.chat.domain.dto.MarkAsReadRequest;
 import com.jdc.chat.service.ChatRoomService;
 import com.jdc.chat.service.ReadReceiptService;
@@ -44,7 +44,7 @@ class ChatRoomControllerTest {
     @DisplayName("채팅방 생성 성공 시 201을 반환하는 테스트")
     void createChatRoom_shouldReturn201() throws Exception {
         // Given
-        CreateChatRoomRequest request = new CreateChatRoomRequest("테스트방", "설명", 1L);
+        CreateChatRoomRequest request = new CreateChatRoomRequest("테스트방", "설명", 1L, null);
         ChatRoomResponse response = new ChatRoomResponse(1L, "테스트방", "설명", 1L, 1, LocalDateTime.now());
         given(chatRoomService.createChatRoom(any(CreateChatRoomRequest.class))).willReturn(response);
 
@@ -61,7 +61,7 @@ class ChatRoomControllerTest {
     @DisplayName("채팅방 이름 누락 시 400을 반환하는 테스트")
     void createChatRoom_shouldReturn400_whenNameBlank() throws Exception {
         // Given
-        CreateChatRoomRequest request = new CreateChatRoomRequest("", "설명", 1L);
+        CreateChatRoomRequest request = new CreateChatRoomRequest("", "설명", 1L, null);
 
         // When & Then
         mockMvc.perform(post("/api/chat/rooms")
@@ -71,14 +71,14 @@ class ChatRoomControllerTest {
     }
 
     @Test
-    @DisplayName("채팅방 목록 조회 시 리스트를 반환하는 테스트")
-    void getAllChatRooms_shouldReturnList() throws Exception {
+    @DisplayName("내 채팅방 목록 조회 시 참여 중인 방만 반환하는 테스트")
+    void getMyChatRooms_shouldReturnMemberRooms() throws Exception {
         // Given
         ChatRoomResponse room = new ChatRoomResponse(1L, "테스트방", "설명", 1L, 2, LocalDateTime.now());
-        given(chatRoomService.getAllChatRooms()).willReturn(List.of(room));
+        given(chatRoomService.getMyChatRooms(1L)).willReturn(List.of(room));
 
         // When & Then
-        mockMvc.perform(get("/api/chat/rooms"))
+        mockMvc.perform(get("/api/chat/rooms").param("userId", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].name").value("테스트방"));
     }
@@ -97,13 +97,13 @@ class ChatRoomControllerTest {
     }
 
     @Test
-    @DisplayName("채팅방 참여 성공 시 200을 반환하는 테스트")
-    void joinChatRoom_shouldReturn200() throws Exception {
+    @DisplayName("채팅방 초대 성공 시 200을 반환하는 테스트")
+    void inviteMembers_shouldReturn200() throws Exception {
         // Given
-        JoinChatRoomRequest request = new JoinChatRoomRequest(2L, "NewUser");
+        InviteRequest request = new InviteRequest(1L, List.of(2L, 3L));
 
         // When & Then
-        mockMvc.perform(post("/api/chat/rooms/1/join")
+        mockMvc.perform(post("/api/chat/rooms/1/invite")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())

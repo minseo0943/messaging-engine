@@ -1,10 +1,15 @@
 package com.jdc.chat.service;
 
-import com.jdc.chat.domain.dto.*;
+import com.jdc.chat.domain.dto.ChatRoomResponse;
+import com.jdc.chat.domain.dto.CreateChatRoomRequest;
+import com.jdc.chat.domain.dto.InviteRequest;
 import com.jdc.chat.domain.entity.ChatRoom;
 import com.jdc.chat.domain.entity.ChatRoomMember;
+import com.jdc.chat.domain.entity.Message;
+import com.jdc.chat.domain.entity.MessageType;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
+import com.jdc.chat.domain.repository.MessageRepository;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +27,7 @@ public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
+    private final MessageRepository messageRepository;
 
     @Transactional
     public ChatRoomResponse createChatRoom(CreateChatRoomRequest request) {
@@ -35,10 +41,21 @@ public class ChatRoomService {
         ChatRoomMember creator = new ChatRoomMember(request.creatorId(), "방장");
         chatRoom.addMember(creator);
 
+        // 초대된 멤버 추가
+        if (request.memberIds() != null) {
+            for (Long memberId : request.memberIds()) {
+                if (!memberId.equals(request.creatorId())) {
+                    ChatRoomMember member = new ChatRoomMember(memberId, "멤버");
+                    chatRoom.addMember(member);
+                }
+            }
+        }
+
         chatRoomRepository.save(chatRoom);
 
-        log.info("채팅방 생성 [roomId={}, name={}, creatorId={}]",
-                chatRoom.getId(), chatRoom.getName(), request.creatorId());
+        log.info("채팅방 생성 [roomId={}, name={}, creatorId={}, members={}]",
+                chatRoom.getId(), chatRoom.getName(), request.creatorId(),
+                chatRoom.getMembers().size());
 
         return ChatRoomResponse.from(chatRoom);
     }
@@ -48,25 +65,48 @@ public class ChatRoomService {
         return ChatRoomResponse.from(chatRoom);
     }
 
-    public List<ChatRoomResponse> getAllChatRooms() {
-        return chatRoomRepository.findAll().stream()
-                .map(ChatRoomResponse::from)
+    public List<ChatRoomResponse> getMyChatRooms(Long userId) {
+        return chatRoomMemberRepository.findByUserId(userId).stream()
+                .map(member -> ChatRoomResponse.from(member.getChatRoom()))
                 .toList();
     }
 
     @Transactional
-    public void joinChatRoom(Long roomId, JoinChatRoomRequest request) {
+    public List<Long> inviteMembers(Long roomId, InviteRequest request) {
         ChatRoom chatRoom = findChatRoomOrThrow(roomId);
 
-        if (chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, request.userId())) {
-            throw new CustomException(ErrorCode.ALREADY_JOINED);
+        if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, request.inviterId())) {
+            throw new CustomException(ErrorCode.NOT_A_MEMBER);
         }
 
-        ChatRoomMember member = new ChatRoomMember(request.userId(), request.nickname());
-        chatRoom.addMember(member);
+        List<Long> invitedIds = new java.util.ArrayList<>();
+        for (Long userId : request.userIds()) {
+            if (!chatRoomMemberRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
+                ChatRoomMember member = new ChatRoomMember(userId, "멤버");
+                chatRoom.addMember(member);
+                invitedIds.add(userId);
+            }
+        }
 
-        log.info("채팅방 참여 [roomId={}, userId={}, nickname={}]",
-                roomId, request.userId(), request.nickname());
+        // 시스템 메시지 생성
+        if (!invitedIds.isEmpty()) {
+            String names = invitedIds.stream()
+                    .map(id -> "User#" + id)
+                    .collect(java.util.stream.Collectors.joining(", "));
+            Message sysMsg = Message.builder()
+                    .chatRoom(chatRoom)
+                    .senderId(0L)
+                    .senderName("시스템")
+                    .content(names + "님이 초대되었습니다")
+                    .type(MessageType.SYSTEM)
+                    .build();
+            messageRepository.save(sysMsg);
+        }
+
+        log.info("채팅방 초대 [roomId={}, inviterId={}, invited={}명]",
+                roomId, request.inviterId(), invitedIds.size());
+
+        return invitedIds;
     }
 
     @Transactional
@@ -74,7 +114,21 @@ public class ChatRoomService {
         ChatRoomMember member = chatRoomMemberRepository.findByChatRoomIdAndUserId(roomId, userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_A_MEMBER));
 
+        ChatRoom chatRoom = member.getChatRoom();
+        String nickname = member.getNickname();
         chatRoomMemberRepository.delete(member);
+
+        // 시스템 메시지 생성
+        Message sysMsg = Message.builder()
+                .chatRoom(chatRoom)
+                .senderId(0L)
+                .senderName("시스템")
+                .content(nickname + "님이 나갔습니다")
+                .type(MessageType.SYSTEM)
+                .build();
+        messageRepository.save(sysMsg);
+
+        log.info("채팅방 나가기 [roomId={}, userId={}, nickname={}]", roomId, userId, nickname);
     }
 
     private ChatRoom findChatRoomOrThrow(Long roomId) {
