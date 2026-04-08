@@ -4,7 +4,6 @@ import com.jdc.presence.domain.dto.PresenceResponse;
 import com.jdc.presence.publisher.PresenceEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -39,8 +38,8 @@ public class PresenceService {
             } else {
                 log.debug("Heartbeat 갱신 [userId={}, ttl={}s]", userId, HEARTBEAT_TTL.getSeconds());
             }
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 heartbeat 무시 [userId={}]", userId);
+        } catch (Exception e) {
+            log.warn("Redis 장애로 heartbeat 무시 [userId={}]: {}", userId, e.getMessage());
         }
     }
 
@@ -51,8 +50,8 @@ public class PresenceService {
             return value != null
                     ? PresenceResponse.online(userId)
                     : PresenceResponse.offline(userId);
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 offline 반환 [userId={}]", userId);
+        } catch (Exception e) {
+            log.warn("Redis 장애로 offline 반환 [userId={}]: {}", userId, e.getMessage());
             return PresenceResponse.offline(userId);
         }
     }
@@ -70,8 +69,8 @@ public class PresenceService {
                         return PresenceResponse.online(userId);
                     })
                     .toList();
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 빈 온라인 목록 반환");
+        } catch (Exception e) {
+            log.warn("Redis 장애로 빈 온라인 목록 반환: {}", e.getMessage());
             return List.of();
         }
     }
@@ -81,8 +80,8 @@ public class PresenceService {
             String key = TYPING_KEY_PREFIX + chatRoomId + ":user:" + userId;
             redisTemplate.opsForValue().set(key, String.valueOf(userId), TYPING_TTL);
             log.debug("타이핑 상태 설정 [userId={}, chatRoomId={}, ttl={}s]", userId, chatRoomId, TYPING_TTL.getSeconds());
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 typing 무시 [userId={}, chatRoomId={}]", userId, chatRoomId);
+        } catch (Exception e) {
+            log.warn("Redis 장애로 typing 무시 [userId={}, chatRoomId={}]: {}", userId, chatRoomId, e.getMessage());
         }
     }
 
@@ -97,8 +96,8 @@ public class PresenceService {
             return keys.stream()
                     .map(key -> Long.valueOf(key.substring(key.lastIndexOf(":") + 1)))
                     .toList();
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 빈 타이핑 목록 반환 [chatRoomId={}]", chatRoomId);
+        } catch (Exception e) {
+            log.warn("Redis 장애로 빈 타이핑 목록 반환 [chatRoomId={}]: {}", chatRoomId, e.getMessage());
             return List.of();
         }
     }
@@ -113,8 +112,8 @@ public class PresenceService {
                 presenceEventPublisher.publishStatusChange(userId, OFFLINE);
             }
             log.info("사용자 접속 해제 [userId={}]", userId);
-        } catch (RedisConnectionFailureException e) {
-            log.warn("Redis 연결 실패로 disconnect 무시 [userId={}]", userId);
+        } catch (Exception e) {
+            log.warn("Redis 장애로 disconnect 무시 [userId={}]: {}", userId, e.getMessage());
         }
     }
 }

@@ -204,6 +204,30 @@ class PresenceServiceTest {
     }
 
     @Test
+    @DisplayName("Redis 컨테이너 중단 시에도 Graceful Degradation이 동작하는 테스트 (비연결 예외)")
+    void getPresence_shouldReturnOffline_whenRedisContainerDown() {
+        // Given — docker stop redis 시 발생하는 예외 타입 시뮬레이션
+        given(redisTemplate.opsForValue()).willThrow(new RuntimeException("io.lettuce.core.RedisException: Connection closed"));
+
+        // When
+        PresenceResponse result = presenceService.getPresence(1L);
+
+        // Then
+        assertThat(result.status()).isEqualTo("OFFLINE");
+        assertThat(result.userId()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("Redis 컨테이너 중단 시에도 heartbeat가 에러 없이 처리되는 테스트")
+    void heartbeat_shouldNotThrow_whenRedisContainerDown() {
+        // Given
+        given(redisTemplate.opsForValue()).willThrow(new RuntimeException("Connection reset by peer"));
+
+        // When & Then (예외 없이 정상 종료)
+        presenceService.heartbeat(1L);
+    }
+
+    @Test
     @DisplayName("이미 OFFLINE인 사용자의 disconnect에는 이벤트가 발행되지 않는 테스트")
     void disconnect_shouldNotPublishEvent_whenAlreadyOffline() {
         // Given

@@ -96,9 +96,9 @@ docker stop messaging-redis > /dev/null 2>&1
 sleep 3
 
 # 2-3. Redis 다운 중 presence 조회 — OFFLINE 반환 (에러 아님)
-PRESENCE_RES=$(curl -s "$PRESENCE/api/presence/9999")
+PRESENCE_RES=$(curl -s "$PRESENCE/api/presence/users/9999")
 STATUS=$(echo "$PRESENCE_RES" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null)
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$PRESENCE/api/presence/9999")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$PRESENCE/api/presence/users/9999")
 if [ "$HTTP_CODE" = "200" ] && [ "$STATUS" = "OFFLINE" ]; then
     pass "Redis 다운 시 Graceful Degradation (OFFLINE 반환, 에러 없음)"
 else
@@ -124,7 +124,7 @@ sleep 5
 # 2-7. Redis 복구 후 정상 동작 확인
 HB_AFTER=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$PRESENCE/api/presence/heartbeat" \
   -H "Content-Type: application/json" -d '{"userId":9999}')
-PRESENCE_AFTER=$(curl -s "$PRESENCE/api/presence/9999")
+PRESENCE_AFTER=$(curl -s "$PRESENCE/api/presence/users/9999")
 STATUS_AFTER=$(echo "$PRESENCE_AFTER" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['status'])" 2>/dev/null)
 [ "$STATUS_AFTER" = "ONLINE" ] && pass "Redis 복구 후 heartbeat → ONLINE 정상" || fail "Redis 복구 후" "status=$STATUS_AFTER"
 
@@ -152,7 +152,7 @@ QUERY_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$QUERY/api/query/rooms/$R
 [ "$QUERY_STATUS" = "200" ] && pass "chat-service 다운이 query-service 읽기에 영향 없음" || fail "chat-service 다운 시 query" "status=$QUERY_STATUS"
 
 # 3-4. presence-service도 정상
-PRES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PRESENCE/api/presence/9999")
+PRES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$PRESENCE/api/presence/users/9999")
 [ "$PRES_STATUS" = "200" ] && pass "chat-service 다운이 presence-service에 영향 없음" || fail "chat-service 다운 시 presence" "status=$PRES_STATUS"
 
 # 3-5. chat-service 복구

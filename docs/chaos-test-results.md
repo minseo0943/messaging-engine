@@ -39,7 +39,7 @@
 > presence-service는 Graceful Degradation 패턴을 적용했으므로,
 > Redis가 다운되어도 500 에러 대신 "OFFLINE"을 반환할 것이다.
 
-### 결과: ⚠️ 부분 실패 — Graceful Degradation 범위 불완전
+### 1차 결과: ⚠️ 부분 실패 — Graceful Degradation 범위 불완전
 
 | 단계 | 동작 | 결과 |
 |------|------|------|
@@ -51,17 +51,47 @@
 | Redis 복구 | `docker start redis` | |
 | 복구 후 heartbeat | POST /heartbeat | ✅ 정상 |
 
+### 원인 분석
+- `catch (RedisConnectionFailureException)` — Spring이 래핑하는 예외만 처리
+- `docker stop redis` 시 Lettuce 드라이버가 `LettuceConnectionException`, `RedisSystemException` 등 **다른 예외 타입**을 발생
+- catch 블록에 걸리지 않아 `GlobalExceptionHandler`로 전파 → 500
+
+### 수정: catch 범위를 `Exception`으로 확장
+
+```java
+// Before — 특정 예외만 catch
+catch (RedisConnectionFailureException e) { ... }
+
+// After — 모든 Redis 관련 예외 포괄
+catch (Exception e) {
+    log.warn("Redis 장애로 기본값 반환: {}", e.getMessage());
+    return PresenceResponse.offline(userId);
+}
+```
+
+6개 메서드(`heartbeat`, `getPresence`, `getOnlineUsers`, `setTyping`, `getTypingUsers`, `disconnect`) 모두 동일 패턴 적용.
+
+### 2차 결과 (수정 후): ✅ Graceful Degradation 완전 동작
+
+| 단계 | 동작 | 결과 |
+|------|------|------|
+| Redis 정상 시 heartbeat | POST /heartbeat | ✅ 200 OK, ONLINE |
+| Redis 다운 | `docker stop redis` | |
+| Redis 다운 시 heartbeat | POST /heartbeat | ✅ 200 OK (Graceful) |
+| Redis 다운 시 presence 조회 | GET /presence/9999 | ✅ 200 OK, OFFLINE 반환 |
+| Redis 다운 시 online users | GET /users/online | ✅ 200 OK, 빈 목록 |
+| Redis 복구 | `docker start redis` | |
+| 복구 후 heartbeat | POST /heartbeat | ✅ 200 OK |
+| 복구 후 presence 조회 | GET /presence/9999 | ✅ ONLINE 복귀 |
+
 ### 발견 사항
-- **presence-service**: `RedisConnectionFailureException`은 catch하지만, `RedisConnectionException`(연결 자체 불가)은 catch하지 못함
-  - Docker로 Redis를 stop하면 연결 자체가 끊어지면서 다른 예외 타입 발생
-  - **수정 필요**: catch 범위를 `Exception`으로 확장하거나 `RedisSystemException` 추가
 - **chat-service/query-service**: Redis를 사용하지 않으므로 영향 없음 → **CQRS 격리 정상**
 - **gateway-service**: Rate Limiting이 Redis 기반이지만, fail-open 정책으로 요청 통과
 
 ### 교훈
-> Graceful Degradation은 "알고 있는 예외"에만 적용된다.
-> 인프라 완전 중단 시 발생하는 예외 타입은 다를 수 있으므로,
-> **모든 Redis 관련 예외를 포괄하는 catch 블록이 필요하다.**
+> 단위 테스트의 Mock 예외(`RedisConnectionFailureException`)와 실제 인프라 장애의 예외(`LettuceConnectionException`)는 다르다.
+> Chaos 테스트 없이는 이 차이를 발견할 수 없었다.
+> **Graceful Degradation은 가능한 한 넓은 예외 범위를 catch해야 한다.**
 
 ---
 
@@ -124,13 +154,13 @@
 | 시나리오 | 상태 | 핵심 발견 |
 |---------|------|----------|
 | Kafka 다운 | ✅ 복구됨 | Outbox 패턴이 메시지 유실을 완전 방지 |
-| Redis 다운 | ⚠️ 부분 실패 | 예외 타입 불일치로 Graceful Degradation 불완전 |
+| Redis 다운 | ✅ 수정 후 통과 | 예외 타입 불일치 발견 → catch(Exception) 확장으로 해결 |
 | chat-service 다운 | ✅ 격리됨 | CQRS 덕분에 읽기 서비스 독립 동작 |
 | query-service 다운 | ✅ 자가 복구 | Kafka offset + 멱등성으로 자동 동기화 |
 
 ## 개선 필요 사항
 
-1. **presence-service Redis 예외 처리 확장** — `RedisConnectionFailureException` 외에 `Exception` 전체 catch
+1. ~~**presence-service Redis 예외 처리 확장**~~ — ✅ 완료 (`catch(Exception e)`로 확장)
 2. **Outbox 테이블 모니터링** — unpublished 이벤트 수 알림 (Prometheus 메트릭)
 3. **서비스 복구 시간 단축** — GraalVM Native Image 또는 메모리 증량으로 cold start 개선
 4. **Circuit Breaker 상태 대시보드** — Grafana에서 CB open/close 상태 시각화
