@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: chat-service
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    show-sql: true
+  flyway:
+    enabled: true
+  kafka:
+    enabled: true
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+
+# MinIO 비활성화
+minio:
+  enabled: false
+
+server:
+  port: 0
+
+logging:
+  level:
+    com.jdc.chat: DEBUG
+    org.springframework.kafka: INFO
