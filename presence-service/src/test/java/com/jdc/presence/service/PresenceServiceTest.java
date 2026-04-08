@@ -35,45 +35,33 @@ class PresenceServiceTest {
     private PresenceService presenceService;
 
     @Test
-    @DisplayName("heartbeat 전송 시 Redis에 ONLINE 상태가 저장되는 테스트")
-    void heartbeat_shouldSetOnlineStatus() {
-        // Given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("presence:user:1")).willReturn("ONLINE");
-
-        // When
-        presenceService.heartbeat(1L);
-
-        // Then
-        then(valueOperations).should().set("presence:user:1", "ONLINE", Duration.ofSeconds(30));
-    }
-
-    @Test
-    @DisplayName("첫 heartbeat 시 OFFLINE→ONLINE 전환이면 Kafka 이벤트가 발행되는 테스트")
+    @DisplayName("첫 heartbeat 시 SET NX 성공으로 ONLINE 이벤트가 발행되는 테스트")
     void heartbeat_shouldPublishOnlineEvent_whenFirstHeartbeat() {
         // Given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("presence:user:1")).willReturn(null);
+        given(valueOperations.setIfAbsent("presence:user:1", "ONLINE", Duration.ofSeconds(30)))
+                .willReturn(true);
 
         // When
         presenceService.heartbeat(1L);
 
         // Then
-        then(valueOperations).should().set("presence:user:1", "ONLINE", Duration.ofSeconds(30));
         then(presenceEventPublisher).should().publishStatusChange(1L, "ONLINE");
     }
 
     @Test
-    @DisplayName("이미 ONLINE인 사용자의 heartbeat에는 이벤트가 발행되지 않는 테스트")
-    void heartbeat_shouldNotPublishEvent_whenAlreadyOnline() {
+    @DisplayName("이미 ONLINE인 사용자의 heartbeat에는 TTL만 갱신되고 이벤트가 발행되지 않는 테스트")
+    void heartbeat_shouldOnlyRefreshTtl_whenAlreadyOnline() {
         // Given
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("presence:user:1")).willReturn("ONLINE");
+        given(valueOperations.setIfAbsent("presence:user:1", "ONLINE", Duration.ofSeconds(30)))
+                .willReturn(false);
 
         // When
         presenceService.heartbeat(1L);
 
         // Then
+        then(redisTemplate).should().expire("presence:user:1", Duration.ofSeconds(30));
         then(presenceEventPublisher).shouldHaveNoInteractions();
     }
 
@@ -191,8 +179,6 @@ class PresenceServiceTest {
     @DisplayName("접속 해제 시 Redis에서 키가 삭제되고 OFFLINE 이벤트가 발행되는 테스트")
     void disconnect_shouldDeleteKeyAndPublishOfflineEvent() {
         // Given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("presence:user:1")).willReturn("ONLINE");
         given(redisTemplate.delete("presence:user:1")).willReturn(true);
 
         // When
@@ -231,8 +217,6 @@ class PresenceServiceTest {
     @DisplayName("이미 OFFLINE인 사용자의 disconnect에는 이벤트가 발행되지 않는 테스트")
     void disconnect_shouldNotPublishEvent_whenAlreadyOffline() {
         // Given
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get("presence:user:1")).willReturn(null);
         given(redisTemplate.delete("presence:user:1")).willReturn(false);
 
         // When

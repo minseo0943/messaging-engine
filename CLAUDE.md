@@ -71,7 +71,7 @@ Client (Swagger UI / K6)
 | Search | Elasticsearch 8.12 + Nori |
 | Tracing | OpenTelemetry Java Agent → Jaeger |
 | Metrics | Micrometer → Prometheus → Grafana |
-| Auth | JWT (간소화, OAuth 없음) |
+| Auth | JWT + OAuth2 Kakao + Refresh Token Rotation |
 | Load Test | K6 |
 | CI/CD | GitHub Actions |
 | Container | Docker Compose |

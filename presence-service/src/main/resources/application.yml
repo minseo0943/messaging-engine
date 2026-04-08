@@ -49,7 +49,7 @@ spring:
     activate:
       on-profile: docker
   kafka:
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
   data:
     redis:
       host: ${REDIS_HOST:redis}

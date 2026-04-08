@@ -24,7 +24,7 @@ public class SpamEventConsumer {
 
     @KafkaListener(
             topics = KafkaTopics.MESSAGE_SPAM_DETECTED,
-            groupId = "query-service-spam",
+            groupId = "${spring.kafka.consumer.group-id:query-service-spam}",
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void consume(@Payload SpamDetectedEvent event,

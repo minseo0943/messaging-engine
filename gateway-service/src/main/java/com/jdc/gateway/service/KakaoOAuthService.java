@@ -52,6 +52,10 @@ public class KakaoOAuthService {
                 .retrieve()
                 .body(Map.class);
 
+        if (response == null) {
+            throw new IllegalStateException("Kakao 토큰 응답이 null입니다");
+        }
+
         return new KakaoTokenResponse(
                 (String) response.get("access_token"),
                 (String) response.get("token_type"),
@@ -66,6 +70,10 @@ public class KakaoOAuthService {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + kakaoAccessToken)
                 .retrieve()
                 .body(Map.class);
+
+        if (response == null || response.get("id") == null) {
+            throw new IllegalStateException("Kakao 사용자 정보 응답이 유효하지 않습니다");
+        }
 
         Long kakaoId = ((Number) response.get("id")).longValue();
         Map<String, Object> properties = (Map<String, Object>) response.get("properties");

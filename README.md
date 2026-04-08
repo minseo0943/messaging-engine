@@ -99,7 +99,7 @@ messaging-engine/
 ├── load-test/               # K6 부하 테스트 스크립트
 ├── monitoring/              # Prometheus + Grafana 설정
 ├── docs/                    # ADR, 벤치마크, 트러블슈팅
-│   ├── adr/                 # Architecture Decision Records (14건)
+│   ├── adr/                 # Architecture Decision Records (18건)
 │   ├── benchmarks/          # Phase별 성능 측정 결과
 │   └── implementation-plan.md
 └── .github/workflows/       # CI Pipeline
@@ -150,9 +150,9 @@ docker compose up -d kafka mysql mongodb redis elasticsearch jaeger prometheus g
 ### 테스트 피라미드
 
 ```
-      ▲ E2E (81개)         — 전체 서비스 연동, CQRS 파이프라인, 스팸 탐지 파이프라인
-      ■ 슬라이스 (~20개)    — @WebMvcTest Controller, Validation, JSON
-      █ 단위 (~50개)        — Service, Consumer, Rule 비즈니스 로직
+      ▲ E2E (~80개)        — 전체 서비스 연동, CQRS 파이프라인, 스팸 탐지 파이프라인
+      ■ 통합 (6개)          — Testcontainers (MySQL + Kafka + MongoDB)
+      █ 단위 (122개)        — Service, Consumer, Controller, Rule 비즈니스 로직
 ```
 
 리스크 기반 설계: Critical Path(메시지→Kafka→MongoDB→스팸)에 단위+E2E 양쪽에서 교차 검증.  

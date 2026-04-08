@@ -103,3 +103,16 @@ management:
 logging:
   level:
     com.jdc.gateway: INFO
+
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+  kafka:
+    enabled: false
+  data:
+    redis:
+      host: localhost
+      port: 6379

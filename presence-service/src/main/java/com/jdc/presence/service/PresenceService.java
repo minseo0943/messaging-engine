@@ -29,13 +29,14 @@ public class PresenceService {
     public void heartbeat(Long userId) {
         try {
             String key = PRESENCE_KEY_PREFIX + userId;
-            boolean wasOffline = redisTemplate.opsForValue().get(key) == null;
-            redisTemplate.opsForValue().set(key, ONLINE, HEARTBEAT_TTL);
-
-            if (wasOffline) {
+            // SET NX로 원자적 상태 전환 감지 — race condition 방지
+            Boolean isNew = redisTemplate.opsForValue().setIfAbsent(key, ONLINE, HEARTBEAT_TTL);
+            if (Boolean.TRUE.equals(isNew)) {
                 presenceEventPublisher.publishStatusChange(userId, ONLINE);
                 log.info("사용자 접속 [userId={}]", userId);
             } else {
+                // 이미 존재하면 TTL만 갱신
+                redisTemplate.expire(key, HEARTBEAT_TTL);
                 log.debug("Heartbeat 갱신 [userId={}, ttl={}s]", userId, HEARTBEAT_TTL.getSeconds());
             }
         } catch (Exception e) {
@@ -105,10 +106,10 @@ public class PresenceService {
     public void disconnect(Long userId) {
         try {
             String key = PRESENCE_KEY_PREFIX + userId;
-            boolean wasOnline = redisTemplate.opsForValue().get(key) != null;
-            redisTemplate.delete(key);
+            // delete는 원자적 — 반환값으로 이전 상태 판단
+            Boolean wasOnline = redisTemplate.delete(key);
 
-            if (wasOnline) {
+            if (Boolean.TRUE.equals(wasOnline)) {
                 presenceEventPublisher.publishStatusChange(userId, OFFLINE);
             }
             log.info("사용자 접속 해제 [userId={}]", userId);
