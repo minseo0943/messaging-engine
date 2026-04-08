@@ -39,12 +39,24 @@ Client (Swagger UI / K6 / E2E Test)
 
 ### CQRS Flow
 
-1. `POST /api/chat/rooms/{id}/messages` → chat-service (MySQL 저장)
-2. `@TransactionalEventListener` → Kafka `message.sent` 발행
+1. `POST /api/chat/rooms/{id}/messages` → chat-service (MySQL + Outbox 저장, 같은 트랜잭션)
+2. OutboxPoller → Kafka `message.sent` 발행 (DB-Kafka 원자성 보장)
 3. query-service Consumer → MongoDB 프로젝션 + Elasticsearch 인덱싱
 4. notification-service Consumer → Slack Webhook 알림 발송
 5. ai-service Consumer → 스팸 탐지 + 우선순위 분류
-6. `GET /api/query/rooms/{id}/messages` → query-service (MongoDB 조회)
+6. gateway-service Consumer → WebSocket(STOMP)으로 실시간 브로드캐스트
+7. `GET /api/query/rooms/{id}/messages` → query-service (MongoDB 조회)
+
+### Kafka Topics
+
+| 토픽 | 파티션 키 | Producer → Consumer |
+|------|----------|---------------------|
+| `message.sent` | chatRoomId | chat → query, notification, ai, gateway |
+| `message.delivered` | chatRoomId | chat (읽음 처리) → query (읽기 모델 투영) |
+| `presence.change` | userId | presence → gateway (실시간 상태 브로드캐스트) |
+| `message.edited` | chatRoomId | chat → query |
+| `message.reaction` | chatRoomId | chat → query |
+| `message.spam-detected` | messageId | ai → query |
 
 ### 메시지 수정 & 리액션 Flow
 
@@ -218,9 +230,29 @@ k6 run load-test/send-message.js
 |-------------|----------|------|
 | 다운스트림 서비스 장애 | Circuit Breaker (서비스별 독립) | 장애 서비스만 503, 나머지 정상 |
 | 일시적 네트워크 끊김 | Retry (2회, 500ms) | 자동 복구 |
-| Redis 연결 실패 | Graceful Degradation | 기본값(offline) 반환, 500 대신 200 |
+| Redis 완전 중단 | Graceful Degradation | 기본값(offline) 반환, 500 대신 200 |
+| Kafka 브로커 다운 | Transactional Outbox | MySQL에 이벤트 보관, 복구 후 자동 발행 |
 | Kafka Consumer 처리 실패 | Dead Letter Topic (3회 재시도) | 실패 메시지 보존, 정상 메시지 처리 계속 |
+| Kafka Consumer 중복 수신 | Idempotent Consumer | eventId 기반 중복 감지, 정확히 1회 처리 |
+| query-service 다운 | Kafka offset 보존 | 복구 후 밀린 이벤트 자동 소비, 읽기 모델 자가 복구 |
 | Gateway 스레드 고갈 | RestClient 타임아웃 (connect 3s, read 5s) | 무한 대기 방지 |
+
+### Chaos Engineering으로 검증한 장애 시나리오
+
+4가지 장애 시나리오를 `docker stop`으로 실제 인프라를 중단시켜 검증했습니다.
+
+| 시나리오 | 방법 | 결과 | 핵심 발견 |
+|---------|------|------|----------|
+| Kafka 브로커 다운 | `docker stop kafka` | ✅ Outbox 패턴이 메시지 유실 완전 방지 | 복구 후 ~40초 내 자동 전파 |
+| Redis 완전 중단 | `docker stop redis` | ✅ Graceful Degradation 동작 | 단위 테스트의 Mock 예외와 실제 예외 타입이 다름을 발견 |
+| chat-service 다운 | `docker stop chat` | ✅ CQRS 격리 — 쓰기 죽어도 읽기 정상 | Gateway가 502 즉시 반환 |
+| query-service 다운 | `docker stop query` | ✅ Kafka offset으로 자가 복구 | 복구 후 Consumer가 자동 동기화 |
+
+> **Redis Chaos 테스트에서 발견한 버그**: 단위 테스트에서는 `RedisConnectionFailureException`을 Mock했지만,
+> 실제 `docker stop redis` 시에는 Lettuce 드라이버가 `LettuceConnectionException`을 발생시켜 catch에 걸리지 않았습니다.
+> → `catch(Exception e)`로 확장하여 해결. **Chaos 테스트 없이는 발견할 수 없었던 결함입니다.**
+
+상세 결과: [docs/chaos-test-results.md](docs/chaos-test-results.md)
 
 ## Kafka Reliability
 
@@ -236,6 +268,32 @@ Error: DefaultErrorHandler + DeadLetterPublishingRecoverer
 
 Ordering: 파티션 키 = chatRoomId
   → 같은 채팅방 내 메시지 순서 보장
+```
+
+### Transactional Outbox Pattern
+
+DB 트랜잭션과 Kafka 이벤트 발행의 원자성 문제를 해결합니다.
+
+```
+[chat-service]
+  1. @Transactional: Message 저장 + OutboxEvent 저장 (같은 트랜잭션)
+  2. OutboxPoller (5초 주기): unpublished 이벤트 → Kafka 발행 → published=true
+
+장점: Kafka가 다운되어도 이벤트가 MySQL에 보관되어 유실 없음
+검증: Chaos 테스트에서 Kafka 30초 다운 → 복구 후 자동 발행 확인
+```
+
+### Idempotent Consumer
+
+at-least-once 전송에서 발생하는 중복 이벤트를 안전하게 처리합니다.
+
+```
+[query-service / notification-service / ai-service]
+  1. eventId(UUID)로 Redis SET NX 체크 (TTL 24시간)
+  2. 이미 처리된 eventId → skip
+  3. 새 eventId → 비즈니스 로직 실행 + ACK
+
+검증: Testcontainers 통합 테스트에서 동일 이벤트 2회 발행 → 1회만 처리 확인
 ```
 
 ## AI Spam Detection (Strategy Pattern)
@@ -313,7 +371,7 @@ DELETE /api/chat/rooms/{roomId}/members/{id} → 나가기
 
 ## Performance Test Results
 
-K6 부하 테스트 결과 (Docker Compose 단일 노드):
+K6 부하 테스트 결과 (Docker Compose 단일 노드, 서비스별 128MB):
 
 | VU | 평균 | p50 | p95 | 에러율 | 판정 |
 |----|------|-----|-----|--------|------|
@@ -321,7 +379,13 @@ K6 부하 테스트 결과 (Docker Compose 단일 노드):
 | 50 | 4.01s | 3.76s | 10.04s | 3.93% | PASS (경고) |
 | 100 | 9.91s | 6.97s | 26.38s | 7.35% | FAIL |
 
-상세 분석: [docs/performance/phase4-results.md](docs/performance/phase4-results.md)
+### 부하 테스트에서 발견한 병목
+
+1. **p50=1초인데 p95=11초** → GC pause의 전형적 패턴. 128MB 제한에서 JVM이 주기적으로 Full GC를 수행하며 stop-the-world 지연 발생
+2. **VU=75에서 채팅방 목록 조회 실패율 69%** → JOIN + 정렬이 포함된 가장 무거운 쿼리가 HikariCP 커넥션 풀(10개)을 고갈시킴
+3. **Outbox Poller 5초 주기** → 부하 시 이벤트 전파 지연이 누적
+
+상세 분석: [docs/performance-tuning.md](docs/performance-tuning.md)
 
 ## Troubleshooting
 
@@ -340,14 +404,25 @@ K6 부하 테스트 결과 (Docker Compose 단일 노드):
 ### 3. Redis 장애가 전체 시스템에 전파 (Cascading Failure)
 **문제**: Redis 연결 실패 → presence-service 500 → Gateway CB Open → Presence 전체 차단  
 **원인**: 부가 기능(접속 상태)의 장애가 핵심 기능처럼 취급됨  
-**해결**: Redis 읽기 실패 시 기본값(offline) 반환, 쓰기 실패 시 로그 후 무시 (Graceful Degradation)
+**해결**: Redis 읽기 실패 시 기본값(offline) 반환, 쓰기 실패 시 로그 후 무시 (Graceful Degradation)  
+**추가 발견** (Chaos 테스트): `catch(RedisConnectionFailureException)`으로는 `docker stop redis` 시 발생하는 `LettuceConnectionException`을 잡지 못함 → `catch(Exception)`으로 확장
 
 ### 4. Gateway 스레드 고갈 (Thread Pool Exhaustion)
 **문제**: chat-service 장애 시 Gateway의 모든 스레드가 타임아웃 대기 → 다른 서비스 요청도 실패  
 **원인**: 장애 서비스에 계속 요청을 전송, 격리 메커니즘 없음  
 **해결**: Resilience4j Circuit Breaker(서비스별 독립) → 장애 서비스는 즉시 503 반환
 
-### 5. 스팸 규칙 하드코딩 (OCP 위반)
+### 5. Kafka 다운 시 Outbox 이벤트 Burst
+**문제**: Kafka 장애 후 복구 시 OutboxPoller가 밀린 이벤트를 한꺼번에 발행 → Consumer 처리 지연  
+**원인**: 100건 batch + 5초 폴링 주기로 burst 발생  
+**완화**: batch size와 polling 주기가 자연스러운 throttle 역할, Idempotent Consumer가 중복 방지
+
+### 6. 부하 테스트 시 채팅방 목록 조회 실패율 69%
+**문제**: K6 VU=75에서 채팅방 목록 API만 대량 실패  
+**원인**: `ChatRoomMember` JOIN + 정렬 쿼리가 HikariCP 커넥션 풀(10개)을 고갈  
+**해결**: 복합 인덱스 추가 + 커넥션 풀 증량. 근본적으로는 CQRS Read Model(MongoDB)로 이관 필요
+
+### 7. 스팸 규칙 하드코딩 (OCP 위반)
 **문제**: 새 규칙 추가 시 `SpamDetectionService` 직접 수정 필요, 임계값 변경에도 재배포  
 **해결**: Strategy 패턴 + `@ConfigurationProperties`로 규칙 분리 및 설정 외부화
 
