@@ -6,6 +6,8 @@ import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageReactionRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.chat.publisher.OutboxEventPublisher;
+import com.jdc.common.constant.KafkaTopics;
 import com.jdc.common.event.MessageEditedEvent;
 import com.jdc.common.event.MessageReactionEvent;
 import com.jdc.common.event.MessageSentEvent;
@@ -13,7 +15,6 @@ import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,7 @@ public class MessageService {
     private final MessageReactionRepository messageReactionRepository;
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventPublisher outboxEventPublisher;
 
     @Transactional
     public MessageResponse sendMessage(Long roomId, SendMessageRequest request) {
@@ -68,16 +69,13 @@ public class MessageService {
         log.info("메시지 저장 완료 [messageId={}, roomId={}, senderId={}]",
                 message.getId(), roomId, request.senderId());
 
-        eventPublisher.publishEvent(new MessageSentEvent(
-                message.getId(),
-                chatRoom.getId(),
-                request.senderId(),
-                request.senderName(),
-                request.content(),
-                replyToId,
-                replyToContent,
-                replyToSender
-        ));
+        outboxEventPublisher.saveEvent("Message", String.valueOf(message.getId()),
+                KafkaTopics.MESSAGE_SENT, String.valueOf(chatRoom.getId()),
+                new MessageSentEvent(
+                        message.getId(), chatRoom.getId(), request.senderId(),
+                        request.senderName(), request.content(),
+                        replyToId, replyToContent, replyToSender
+                ));
 
         return MessageResponse.from(message);
     }
@@ -138,12 +136,12 @@ public class MessageService {
 
         message.edit(request.content());
 
-        eventPublisher.publishEvent(new MessageEditedEvent(
-                message.getId(),
-                message.getChatRoom().getId(),
-                request.senderId(),
-                request.content()
-        ));
+        outboxEventPublisher.saveEvent("Message", String.valueOf(message.getId()),
+                KafkaTopics.MESSAGE_EDITED, String.valueOf(message.getChatRoom().getId()),
+                new MessageEditedEvent(
+                        message.getId(), message.getChatRoom().getId(),
+                        request.senderId(), request.content()
+                ));
 
         log.info("메시지 수정 완료 [messageId={}, roomId={}, senderId={}]",
                 messageId, roomId, request.senderId());
@@ -174,10 +172,12 @@ public class MessageService {
 
         messageReactionRepository.save(reaction);
 
-        eventPublisher.publishEvent(new MessageReactionEvent(
-                messageId, roomId, request.userId(), request.emoji(),
-                MessageReactionEvent.ActionType.ADDED
-        ));
+        outboxEventPublisher.saveEvent("Reaction", String.valueOf(messageId),
+                KafkaTopics.MESSAGE_REACTION, String.valueOf(roomId),
+                new MessageReactionEvent(
+                        messageId, roomId, request.userId(), request.emoji(),
+                        MessageReactionEvent.ActionType.ADDED
+                ));
 
         log.info("리액션 추가 [messageId={}, userId={}, emoji={}]",
                 messageId, request.userId(), request.emoji());
@@ -197,10 +197,12 @@ public class MessageService {
 
         messageReactionRepository.delete(reaction);
 
-        eventPublisher.publishEvent(new MessageReactionEvent(
-                messageId, roomId, userId, emoji,
-                MessageReactionEvent.ActionType.REMOVED
-        ));
+        outboxEventPublisher.saveEvent("Reaction", String.valueOf(messageId),
+                KafkaTopics.MESSAGE_REACTION, String.valueOf(roomId),
+                new MessageReactionEvent(
+                        messageId, roomId, userId, emoji,
+                        MessageReactionEvent.ActionType.REMOVED
+                ));
 
         log.info("리액션 제거 [messageId={}, userId={}, emoji={}]",
                 messageId, userId, emoji);

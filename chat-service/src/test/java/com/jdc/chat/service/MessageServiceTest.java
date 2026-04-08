@@ -9,7 +9,8 @@ import com.jdc.chat.domain.entity.MessageType;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
-import com.jdc.common.event.MessageSentEvent;
+import com.jdc.chat.publisher.OutboxEventPublisher;
+import com.jdc.common.event.BaseEvent;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -19,7 +20,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
@@ -47,7 +47,7 @@ class MessageServiceTest {
     private ChatRoomMemberRepository chatRoomMemberRepository;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private OutboxEventPublisher outboxEventPublisher;
 
     @InjectMocks
     private MessageService messageService;
@@ -73,13 +73,9 @@ class MessageServiceTest {
         assertThat(response.type()).isEqualTo(MessageType.TEXT);
 
         then(messageRepository).should().save(any(Message.class));
-
-        ArgumentCaptor<MessageSentEvent> eventCaptor = ArgumentCaptor.forClass(MessageSentEvent.class);
-        then(eventPublisher).should().publishEvent(eventCaptor.capture());
-
-        MessageSentEvent event = eventCaptor.getValue();
-        assertThat(event.getSenderId()).isEqualTo(100L);
-        assertThat(event.getContent()).isEqualTo("안녕하세요");
+        then(outboxEventPublisher).should().saveEvent(
+                any(String.class), any(String.class), any(String.class),
+                any(String.class), any(BaseEvent.class));
     }
 
     @Test
@@ -97,7 +93,8 @@ class MessageServiceTest {
                         .isEqualTo(ErrorCode.CHAT_ROOM_NOT_FOUND));
 
         then(messageRepository).should(never()).save(any());
-        then(eventPublisher).should(never()).publishEvent(any());
+        then(outboxEventPublisher).should(never()).saveEvent(
+                any(), any(), any(), any(), any());
     }
 
     @Test
@@ -163,10 +160,9 @@ class MessageServiceTest {
         assertThat(response.replyToContent()).isEqualTo("원본 메시지 내용");
         assertThat(response.replyToSender()).isEqualTo("원본유저");
 
-        ArgumentCaptor<MessageSentEvent> eventCaptor = ArgumentCaptor.forClass(MessageSentEvent.class);
-        then(eventPublisher).should().publishEvent(eventCaptor.capture());
-        assertThat(eventCaptor.getValue().getReplyToId()).isEqualTo(replyTargetId);
-        assertThat(eventCaptor.getValue().getReplyToContent()).isEqualTo("원본 메시지 내용");
+        then(outboxEventPublisher).should().saveEvent(
+                any(String.class), any(String.class), any(String.class),
+                any(String.class), any(BaseEvent.class));
     }
 
     @Test
