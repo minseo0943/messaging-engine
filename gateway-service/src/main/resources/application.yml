@@ -23,7 +23,8 @@ oauth2:
 # Gateway
 gateway:
   rate-limit:
-    max-requests: 300
+    max-requests: 300              # 미인증 (IP 기반)
+    authenticated-max-requests: 500 # 인증 사용자 (userId 기반)
     window-seconds: 60
   services:
     chat-service: ${CHAT_SERVICE_URL:http://localhost:8081}
