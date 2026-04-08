@@ -31,13 +31,21 @@ class MessageAnalysisConsumerTest {
     private SpamEventPublisher spamEventPublisher;
 
     @Mock
+    private IdempotentEventProcessor idempotentProcessor;
+
+    @Mock
     private Acknowledgment ack;
 
     private MessageAnalysisConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new MessageAnalysisConsumer(analysisService, spamEventPublisher, new SimpleMeterRegistry());
+        consumer = new MessageAnalysisConsumer(analysisService, spamEventPublisher, idempotentProcessor, new SimpleMeterRegistry());
+        willAnswer(invocation -> {
+            Runnable processor = invocation.getArgument(2);
+            processor.run();
+            return true;
+        }).given(idempotentProcessor).processIfNew(anyString(), anyString(), any(Runnable.class));
     }
 
     @Test

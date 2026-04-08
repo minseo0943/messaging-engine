@@ -126,6 +126,27 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
 
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: messaging-loki
+    profiles: ["full", "monitoring"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:2.9.4
+    container_name: messaging-promtail
+    profiles: ["full", "monitoring"]
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: messaging-prometheus
@@ -155,6 +176,7 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+      - loki
 
   # ──────────────── Application Services ────────────────
 
@@ -248,10 +270,13 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Xmx96m"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
       JAEGER_HOST: jaeger
       SLACK_ENABLED: "false"
     depends_on:
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   ai-service:
@@ -265,9 +290,12 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Xmx96m"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_HOST: redis
       JAEGER_HOST: jaeger
     depends_on:
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   minio:
@@ -295,5 +323,6 @@ volumes:
   redis-data:
   elasticsearch-data:
   minio-data:
+  loki-data:
   prometheus-data:
   grafana-data:

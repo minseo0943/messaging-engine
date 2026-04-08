@@ -3,6 +3,7 @@ package com.jdc.common.event;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.slf4j.MDC;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -21,6 +22,8 @@ public abstract class BaseEvent {
         this.eventId = UUID.randomUUID().toString();
         this.eventType = eventType;
         this.timestamp = Instant.now();
-        this.traceId = UUID.randomUUID().toString();
+        // MDC에서 Correlation ID를 읽어 traceId로 사용 (Gateway → 서비스 → 이벤트 전파)
+        String correlationId = MDC.get("correlationId");
+        this.traceId = (correlationId != null) ? correlationId : UUID.randomUUID().toString();
     }
 }
