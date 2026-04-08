@@ -182,9 +182,11 @@ public class GatewayRouter {
                     }
                     Object userId = request.getAttribute("userId");
                     Object username = request.getAttribute("username");
+                    Object correlationId = request.getAttribute("correlationId");
                     if (userId != null) headers.set("X-User-Id", String.valueOf(userId));
                     if (username != null) headers.set("X-Username",
                             URLEncoder.encode(String.valueOf(username), StandardCharsets.UTF_8));
+                    if (correlationId != null) headers.set("X-Correlation-Id", String.valueOf(correlationId));
                 });
 
         if (body.length > 0) {
