@@ -56,6 +56,8 @@ spring:
   config:
     activate:
       on-profile: local
+  kafka:
+    enabled: false
   data:
     redis:
       host: localhost
@@ -71,6 +73,12 @@ spring:
   config:
     activate:
       on-profile: docker
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    consumer:
+      group-id: gateway-websocket
+      auto-offset-reset: latest
+      enable-auto-commit: false
   data:
     redis:
       host: ${REDIS_HOST:redis}

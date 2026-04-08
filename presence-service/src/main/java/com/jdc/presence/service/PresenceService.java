@@ -1,6 +1,7 @@
 package com.jdc.presence.service;
 
 import com.jdc.presence.domain.dto.PresenceResponse;
+import com.jdc.presence.publisher.PresenceEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -21,14 +22,23 @@ public class PresenceService {
     private static final Duration HEARTBEAT_TTL = Duration.ofSeconds(30);
     private static final Duration TYPING_TTL = Duration.ofSeconds(3);
     private static final String ONLINE = "ONLINE";
+    private static final String OFFLINE = "OFFLINE";
 
     private final StringRedisTemplate redisTemplate;
+    private final PresenceEventPublisher presenceEventPublisher;
 
     public void heartbeat(Long userId) {
         try {
             String key = PRESENCE_KEY_PREFIX + userId;
+            boolean wasOffline = redisTemplate.opsForValue().get(key) == null;
             redisTemplate.opsForValue().set(key, ONLINE, HEARTBEAT_TTL);
-            log.debug("Heartbeat 갱신 [userId={}, ttl={}s]", userId, HEARTBEAT_TTL.getSeconds());
+
+            if (wasOffline) {
+                presenceEventPublisher.publishStatusChange(userId, ONLINE);
+                log.info("사용자 접속 [userId={}]", userId);
+            } else {
+                log.debug("Heartbeat 갱신 [userId={}, ttl={}s]", userId, HEARTBEAT_TTL.getSeconds());
+            }
         } catch (RedisConnectionFailureException e) {
             log.warn("Redis 연결 실패로 heartbeat 무시 [userId={}]", userId);
         }
@@ -96,7 +106,12 @@ public class PresenceService {
     public void disconnect(Long userId) {
         try {
             String key = PRESENCE_KEY_PREFIX + userId;
+            boolean wasOnline = redisTemplate.opsForValue().get(key) != null;
             redisTemplate.delete(key);
+
+            if (wasOnline) {
+                presenceEventPublisher.publishStatusChange(userId, OFFLINE);
+            }
             log.info("사용자 접속 해제 [userId={}]", userId);
         } catch (RedisConnectionFailureException e) {
             log.warn("Redis 연결 실패로 disconnect 무시 [userId={}]", userId);

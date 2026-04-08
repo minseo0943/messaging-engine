@@ -4,6 +4,9 @@ import com.jdc.chat.domain.entity.MessageReadStatus;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageReadStatusRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.chat.publisher.OutboxEventPublisher;
+import com.jdc.common.constant.KafkaTopics;
+import com.jdc.common.event.MessageDeliveredEvent;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +25,7 @@ public class ReadReceiptService {
     private final MessageReadStatusRepository messageReadStatusRepository;
     private final MessageRepository messageRepository;
     private final ChatRoomRepository chatRoomRepository;
+    private final OutboxEventPublisher outboxEventPublisher;
 
     @Transactional
     public void markAsRead(Long chatRoomId, Long userId, Long lastMessageId) {
@@ -48,6 +52,12 @@ public class ReadReceiptService {
                                     chatRoomId, userId, lastMessageId);
                         }
                 );
+
+        outboxEventPublisher.saveEvent("ReadReceipt",
+                chatRoomId + ":" + userId,
+                KafkaTopics.MESSAGE_DELIVERED,
+                String.valueOf(chatRoomId),
+                new MessageDeliveredEvent(chatRoomId, userId, lastMessageId));
     }
 
     public long getUnreadCount(Long chatRoomId, Long userId) {

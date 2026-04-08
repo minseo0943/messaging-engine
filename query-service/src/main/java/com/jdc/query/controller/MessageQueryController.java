@@ -3,6 +3,7 @@ package com.jdc.query.controller;
 import com.jdc.common.dto.ApiResponse;
 import com.jdc.query.domain.dto.ChatRoomViewResponse;
 import com.jdc.query.domain.dto.MessageQueryResponse;
+import com.jdc.query.domain.dto.ReadStatusResponse;
 import com.jdc.query.service.MessageQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,5 +44,18 @@ public class MessageQueryController {
     @GetMapping("/rooms")
     public ApiResponse<List<ChatRoomViewResponse>> getAllChatRoomViews() {
         return ApiResponse.ok(messageQueryService.getAllChatRoomViews());
+    }
+
+    @Operation(summary = "채팅방 읽음 상태 조회", description = "채팅방 멤버들의 읽음 상태를 조회합니다")
+    @GetMapping("/rooms/{chatRoomId}/read-statuses")
+    public ApiResponse<List<ReadStatusResponse>> getReadStatuses(@PathVariable Long chatRoomId) {
+        return ApiResponse.ok(messageQueryService.getReadStatuses(chatRoomId));
+    }
+
+    @Operation(summary = "메시지 읽은 수 조회", description = "특정 메시지를 읽은 사용자 수를 조회합니다")
+    @GetMapping("/rooms/{chatRoomId}/messages/{messageId}/read-count")
+    public ApiResponse<Long> getReadCount(@PathVariable Long chatRoomId,
+                                          @PathVariable Long messageId) {
+        return ApiResponse.ok(messageQueryService.getReadCount(chatRoomId, messageId));
     }
 }

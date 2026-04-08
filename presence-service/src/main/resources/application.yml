@@ -31,6 +31,8 @@ spring:
   config:
     activate:
       on-profile: local
+  kafka:
+    enabled: false
   data:
     redis:
       host: localhost
@@ -46,6 +48,8 @@ spring:
   config:
     activate:
       on-profile: docker
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
   data:
     redis:
       host: ${REDIS_HOST:redis}
@@ -70,6 +74,8 @@ spring:
   config:
     activate:
       on-profile: test
+  kafka:
+    enabled: false
   data:
     redis:
       host: localhost

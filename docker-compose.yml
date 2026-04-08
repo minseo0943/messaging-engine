@@ -191,6 +191,7 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Xmx128m"
       REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       CHAT_SERVICE_HOST: chat-service
       QUERY_SERVICE_HOST: query-service
       PRESENCE_SERVICE_HOST: presence-service
@@ -198,6 +199,8 @@ services:
       JAEGER_HOST: jaeger
     depends_on:
       redis:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   chat-service:
@@ -254,9 +257,12 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       JAVA_TOOL_OPTIONS: "-Xmx96m"
       REDIS_HOST: redis
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       JAEGER_HOST: jaeger
     depends_on:
       redis:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   notification-service:

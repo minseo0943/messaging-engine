@@ -4,6 +4,7 @@ import com.jdc.chat.domain.entity.MessageReadStatus;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageReadStatusRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.chat.publisher.OutboxEventPublisher;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -35,6 +36,9 @@ class ReadReceiptServiceTest {
 
     @Mock
     private ChatRoomRepository chatRoomRepository;
+
+    @Mock
+    private OutboxEventPublisher outboxEventPublisher;
 
     @InjectMocks
     private ReadReceiptService readReceiptService;

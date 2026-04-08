@@ -1,4 +1,4 @@
-package com.jdc.chat.config;
+package com.jdc.presence.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -16,7 +16,7 @@ import org.springframework.kafka.support.serializer.JsonSerializer;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.jdc.common.constant.KafkaTopics.*;
+import static com.jdc.common.constant.KafkaTopics.PRESENCE_CHANGE;
 
 @Configuration
 @ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = true)
@@ -44,32 +44,8 @@ public class KafkaProducerConfig {
     }
 
     @Bean
-    public NewTopic messageSentTopic() {
-        return TopicBuilder.name(MESSAGE_SENT)
-                .partitions(3)
-                .replicas(1)
-                .build();
-    }
-
-    @Bean
-    public NewTopic messageEditedTopic() {
-        return TopicBuilder.name(MESSAGE_EDITED)
-                .partitions(3)
-                .replicas(1)
-                .build();
-    }
-
-    @Bean
-    public NewTopic messageReactionTopic() {
-        return TopicBuilder.name(MESSAGE_REACTION)
-                .partitions(3)
-                .replicas(1)
-                .build();
-    }
-
-    @Bean
-    public NewTopic messageDeliveredTopic() {
-        return TopicBuilder.name(MESSAGE_DELIVERED)
+    public NewTopic presenceChangeTopic() {
+        return TopicBuilder.name(PRESENCE_CHANGE)
                 .partitions(3)
                 .replicas(1)
                 .build();
