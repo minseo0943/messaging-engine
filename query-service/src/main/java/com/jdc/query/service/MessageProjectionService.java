@@ -50,11 +50,11 @@ public class MessageProjectionService {
 
         messageDocumentRepository.save(document);
 
-        // 2. ChatRoomView 갱신 (upsert)
+        // 2. ChatRoomView 갱신 (upsert — ChatRoomCreatedEvent가 먼저 도착했다면 이미 존재)
         ChatRoomView view = chatRoomViewRepository.findByChatRoomId(event.getChatRoomId())
                 .orElse(ChatRoomView.builder()
                         .chatRoomId(event.getChatRoomId())
-                        .roomName("Room-" + event.getChatRoomId())
+                        .roomName("Room-" + event.getChatRoomId()) // fallback: 생성 이벤트 미도착 시
                         .messageCount(0)
                         .createdAt(Instant.now())
                         .build());

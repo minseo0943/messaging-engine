@@ -8,6 +8,7 @@ import com.jdc.chat.domain.repository.MessageReactionRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
 import com.jdc.chat.publisher.OutboxEventPublisher;
 import com.jdc.common.constant.KafkaTopics;
+import com.jdc.common.event.MessageDeletedEvent;
 import com.jdc.common.event.MessageEditedEvent;
 import com.jdc.common.event.MessageReactionEvent;
 import com.jdc.common.event.MessageSentEvent;
@@ -103,6 +104,10 @@ public class MessageService {
         if (updatedReplies > 0) {
             log.info("삭제된 ���시지를 참조하는 답장 {}건의 replyToContent 업데이트", updatedReplies);
         }
+
+        outboxEventPublisher.saveEvent("Message", String.valueOf(messageId),
+                KafkaTopics.MESSAGE_DELETED, String.valueOf(roomId),
+                new MessageDeletedEvent(messageId, roomId, userId));
 
         log.info("메시지 삭제 완료 [messageId={}, roomId={}, userId={}]",
                 messageId, roomId, userId);

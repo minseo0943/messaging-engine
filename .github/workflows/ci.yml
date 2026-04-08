@@ -106,7 +106,6 @@ jobs:
 
       - name: Run integration tests (Testcontainers)
         run: ./gradlew integrationTest --no-daemon
-        continue-on-error: true
 
       - name: Upload integration test results
         uses: actions/upload-artifact@v4
@@ -173,9 +172,8 @@ jobs:
       - name: Push Docker image
         if: github.event_name == 'push'
         run: |
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }} || true
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest || true
-        continue-on-error: true
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ github.sha }}
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:latest
 
   # ──────────────── Docker Compose Validation ────────────────
   compose-validate:

@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Outbox 폴러: 주기적으로 미발행 이벤트를 조회하여 Kafka로 발행한다.
@@ -53,7 +54,7 @@ public class OutboxPoller {
                             outbox.getCorrelationId().getBytes(StandardCharsets.UTF_8)));
                 }
 
-                kafkaTemplate.send(record).get(); // 동기 전송 (발행 보장)
+                kafkaTemplate.send(record).get(10, TimeUnit.SECONDS); // 동기 전송 (발행 보장, 타임아웃 10초)
                 publishedIds.add(outbox.getId());
 
                 log.debug("Outbox 이벤트 발행 성공 [id={}, type={}, topic={}]",

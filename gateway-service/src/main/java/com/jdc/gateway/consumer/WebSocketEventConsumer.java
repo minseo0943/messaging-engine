@@ -1,7 +1,9 @@
 package com.jdc.gateway.consumer;
 
 import com.jdc.common.constant.KafkaTopics;
+import com.jdc.common.event.MessageDeletedEvent;
 import com.jdc.common.event.MessageDeliveredEvent;
+import com.jdc.common.event.MessageEditedEvent;
 import com.jdc.common.event.MessageSentEvent;
 import com.jdc.common.event.PresenceChangeEvent;
 import com.jdc.gateway.websocket.WebSocketBroadcaster;
@@ -50,6 +52,46 @@ public class WebSocketEventConsumer {
     }
 
     @KafkaListener(
+            topics = KafkaTopics.MESSAGE_EDITED,
+            groupId = "gateway-websocket",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onMessageEdited(@Payload MessageEditedEvent event, Acknowledgment ack) {
+        try {
+            broadcaster.broadcastMessage(event.getChatRoomId(), Map.of(
+                    "type", "EDIT",
+                    "messageId", event.getMessageId(),
+                    "chatRoomId", event.getChatRoomId(),
+                    "content", event.getNewContent(),
+                    "timestamp", event.getTimestamp().toString()
+            ));
+            ack.acknowledge();
+            log.debug("실시간 메시지 수정 브로드캐스트 [chatRoomId={}, messageId={}]",
+                    event.getChatRoomId(), event.getMessageId());
+        } catch (Exception e) {
+            log.error("메시지 수정 브로드캐스트 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage());
+            ack.acknowledge();
+        }
+    }
+
+    @KafkaListener(
+            topics = KafkaTopics.MESSAGE_DELETED,
+            groupId = "gateway-websocket",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void onMessageDeleted(@Payload MessageDeletedEvent event, Acknowledgment ack) {
+        try {
+            broadcaster.broadcastMessageDelete(event.getChatRoomId(), event.getMessageId());
+            ack.acknowledge();
+            log.debug("실시간 메시지 삭제 브로드캐스트 [chatRoomId={}, messageId={}]",
+                    event.getChatRoomId(), event.getMessageId());
+        } catch (Exception e) {
+            log.error("메시지 삭제 브로드캐스트 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage());
+            ack.acknowledge();
+        }
+    }
+
+    @KafkaListener(
             topics = KafkaTopics.PRESENCE_CHANGE,
             groupId = "gateway-websocket",
             containerFactory = "kafkaListenerContainerFactory"
@@ -73,7 +115,6 @@ public class WebSocketEventConsumer {
     )
     public void onMessageDelivered(@Payload MessageDeliveredEvent event, Acknowledgment ack) {
         try {
-            String destination = "/topic/rooms/" + event.getChatRoomId() + "/read-status";
             broadcaster.broadcastRoomEvent(event.getChatRoomId(), Map.of(
                     "type", "READ_STATUS",
                     "userId", event.getUserId(),

@@ -1,6 +1,7 @@
 package com.jdc.query.consumer;
 
 import com.jdc.common.constant.KafkaTopics;
+import com.jdc.common.event.MessageDeletedEvent;
 import com.jdc.common.event.MessageEditedEvent;
 import com.jdc.common.event.MessageReactionEvent;
 import com.jdc.common.event.MessageSentEvent;
@@ -148,6 +149,35 @@ public class MessageEventConsumer {
             ack.acknowledge();
         } catch (Exception e) {
             log.error("리액션 이벤트 처리 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @KafkaListener(
+            topics = KafkaTopics.MESSAGE_DELETED,
+            groupId = "${spring.kafka.consumer.group-id:query-service-projection}",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void consumeDelete(@Payload MessageDeletedEvent event,
+                              @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+                              @Header(KafkaHeaders.OFFSET) long offset,
+                              Acknowledgment ack) {
+        log.info("메시지 삭제 이벤트 수신 [messageId={}, partition={}, offset={}]",
+                event.getMessageId(), partition, offset);
+
+        try {
+            idempotentProcessor.processIfNew(event.getEventId(), "message-delete", () ->
+                    messageDocumentRepository.findByMessageId(event.getMessageId())
+                            .ifPresentOrElse(doc -> {
+                                doc.setDeleted(true);
+                                doc.setContent("[삭제된 메시지]");
+                                messageDocumentRepository.save(doc);
+                                log.info("메시지 삭제 프로젝션 완료 [messageId={}]", event.getMessageId());
+                            }, () -> log.warn("삭제 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
+
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("메시지 삭제 이벤트 처리 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage(), e);
             throw e;
         }
     }

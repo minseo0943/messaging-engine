@@ -21,7 +21,7 @@ export const options = {
   },
 };
 
-const BASE_URL = __ENV.BASE_URL || 'http://localhost:8081';
+const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
 
 // setup: 채팅방 생성 + 멤버 등록
 export function setup() {

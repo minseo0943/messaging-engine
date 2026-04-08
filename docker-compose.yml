@@ -160,6 +160,15 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: messaging-alertmanager
+    profiles: ["full", "monitoring"]
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+
   grafana:
     image: grafana/grafana:10.4.0
     container_name: messaging-grafana

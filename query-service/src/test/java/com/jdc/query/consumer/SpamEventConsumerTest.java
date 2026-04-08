@@ -14,6 +14,8 @@ import org.springframework.kafka.support.Acknowledgment;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,13 +25,16 @@ class SpamEventConsumerTest {
     private MessageDocumentRepository messageDocumentRepository;
 
     @Mock
+    private IdempotentEventProcessor idempotentProcessor;
+
+    @Mock
     private Acknowledgment ack;
 
     @InjectMocks
     private SpamEventConsumer consumer;
 
     @Test
-    @DisplayName("스팸 이벤트 수신 시 도큐먼트의 spamStatus를 SPAM으로 업데이트하는 테스트")
+    @DisplayName("스팸 이벤트 수신 시 멱등 처리를 통해 도큐먼트의 spamStatus를 업데이트하는 테스트")
     void consume_shouldUpdateSpamStatus_whenDocumentExists() {
         // Given
         SpamDetectedEvent event = new SpamDetectedEvent(1L, 100L, "광고 키워드 감지", 0.8);
@@ -38,6 +43,13 @@ class SpamEventConsumerTest {
                 .chatRoomId(100L)
                 .spamStatus("CLEAN")
                 .build();
+
+        given(idempotentProcessor.processIfNew(any(), eq("spam-detection"), any()))
+                .willAnswer(invocation -> {
+                    Runnable action = invocation.getArgument(2);
+                    action.run();
+                    return true;
+                });
         given(messageDocumentRepository.findByMessageId(1L)).willReturn(Optional.of(doc));
 
         // When
@@ -52,17 +64,22 @@ class SpamEventConsumerTest {
     }
 
     @Test
-    @DisplayName("도큐먼트가 없을 때 5회 재시도 후 ack하는 테스트")
-    void consume_shouldAcknowledge_whenDocumentNotFoundAfterRetries() {
+    @DisplayName("도큐먼트가 없을 때 정상 ack되는 테스트 (DLT에서 재처리)")
+    void consume_shouldAcknowledge_whenDocumentNotFound() {
         // Given
         SpamDetectedEvent event = new SpamDetectedEvent(999L, 100L, "스팸", 0.9);
+        given(idempotentProcessor.processIfNew(any(), eq("spam-detection"), any()))
+                .willAnswer(invocation -> {
+                    Runnable action = invocation.getArgument(2);
+                    action.run();
+                    return true;
+                });
         given(messageDocumentRepository.findByMessageId(999L)).willReturn(Optional.empty());
 
         // When
         consumer.consume(event, 0, 0L, ack);
 
         // Then
-        then(messageDocumentRepository).should(atLeast(1)).findByMessageId(999L);
         then(ack).should().acknowledge();
     }
 }

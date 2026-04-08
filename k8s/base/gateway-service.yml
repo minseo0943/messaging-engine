@@ -28,6 +28,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: messaging-config
+            - secretRef:
+                name: messaging-secrets
           resources:
             requests:
               cpu: 100m

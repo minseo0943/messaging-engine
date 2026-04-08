@@ -7,7 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
+
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -59,17 +63,24 @@ public class PresenceService {
 
     public List<PresenceResponse> getOnlineUsers() {
         try {
-            Set<String> keys = redisTemplate.keys(PRESENCE_KEY_PREFIX + "*");
-            if (keys == null || keys.isEmpty()) {
-                return List.of();
-            }
+            List<PresenceResponse> onlineUsers = new ArrayList<>();
+            ScanOptions options = ScanOptions.scanOptions()
+                    .match(PRESENCE_KEY_PREFIX + "*")
+                    .count(100)
+                    .build();
 
-            return keys.stream()
-                    .map(key -> {
-                        Long userId = Long.valueOf(key.replace(PRESENCE_KEY_PREFIX, ""));
-                        return PresenceResponse.online(userId);
-                    })
-                    .toList();
+            try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                while (cursor.hasNext()) {
+                    String key = cursor.next();
+                    String userIdStr = key.replace(PRESENCE_KEY_PREFIX, "");
+                    try {
+                        onlineUsers.add(PresenceResponse.online(Long.valueOf(userIdStr)));
+                    } catch (NumberFormatException e) {
+                        log.warn("잘못된 presence 키 무시 [key={}]", key);
+                    }
+                }
+            }
+            return onlineUsers;
         } catch (Exception e) {
             log.warn("Redis 장애로 빈 온라인 목록 반환: {}", e.getMessage());
             return List.of();
@@ -89,14 +100,20 @@ public class PresenceService {
     public List<Long> getTypingUsers(Long chatRoomId) {
         try {
             String pattern = TYPING_KEY_PREFIX + chatRoomId + ":user:*";
-            Set<String> keys = redisTemplate.keys(pattern);
-            if (keys == null || keys.isEmpty()) {
-                return List.of();
-            }
+            List<Long> typingUsers = new ArrayList<>();
+            ScanOptions options = ScanOptions.scanOptions().match(pattern).count(50).build();
 
-            return keys.stream()
-                    .map(key -> Long.valueOf(key.substring(key.lastIndexOf(":") + 1)))
-                    .toList();
+            try (Cursor<String> cursor = redisTemplate.scan(options)) {
+                while (cursor.hasNext()) {
+                    String key = cursor.next();
+                    try {
+                        typingUsers.add(Long.valueOf(key.substring(key.lastIndexOf(":") + 1)));
+                    } catch (NumberFormatException e) {
+                        log.warn("잘못된 typing 키 무시 [key={}]", key);
+                    }
+                }
+            }
+            return typingUsers;
         } catch (Exception e) {
             log.warn("Redis 장애로 빈 타이핑 목록 반환 [chatRoomId={}]: {}", chatRoomId, e.getMessage());
             return List.of();

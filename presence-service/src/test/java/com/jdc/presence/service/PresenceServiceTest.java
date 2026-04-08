@@ -9,10 +9,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
@@ -118,12 +121,16 @@ class PresenceServiceTest {
         assertThat(result.userId()).isEqualTo(1L);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     @DisplayName("온라인 사용자 목록 조회 시 접속 중인 사용자를 반환하는 테스트")
     void getOnlineUsers_shouldReturnOnlineUsers() {
         // Given
-        given(redisTemplate.keys("presence:user:*"))
-                .willReturn(Set.of("presence:user:1", "presence:user:2"));
+        Cursor<String> cursor = mock(Cursor.class);
+        Iterator<String> iterator = List.of("presence:user:1", "presence:user:2").iterator();
+        given(cursor.hasNext()).willAnswer(inv -> iterator.hasNext());
+        given(cursor.next()).willAnswer(inv -> iterator.next());
+        given(redisTemplate.scan(any(ScanOptions.class))).willReturn(cursor);
 
         // When
         List<PresenceResponse> result = presenceService.getOnlineUsers();
@@ -137,7 +144,7 @@ class PresenceServiceTest {
     @DisplayName("온라인 사용자 목록 조회 시 Redis 연결 실패하면 빈 목록을 반환하는 테스트")
     void getOnlineUsers_shouldReturnEmptyList_whenRedisConnectionFails() {
         // Given
-        given(redisTemplate.keys("presence:user:*"))
+        given(redisTemplate.scan(any(ScanOptions.class)))
                 .willThrow(new RedisConnectionFailureException("Connection refused"));
 
         // When
@@ -160,12 +167,16 @@ class PresenceServiceTest {
         then(valueOperations).should().set("typing:room:100:user:1", "1", Duration.ofSeconds(3));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     @DisplayName("타이핑 사용자 목록 조회 시 userId를 추출하여 반환하는 테스트")
     void getTypingUsers_shouldReturnUserIds() {
         // Given
-        given(redisTemplate.keys("typing:room:100:user:*"))
-                .willReturn(Set.of("typing:room:100:user:1", "typing:room:100:user:2"));
+        Cursor<String> cursor = mock(Cursor.class);
+        Iterator<String> iterator = List.of("typing:room:100:user:1", "typing:room:100:user:2").iterator();
+        given(cursor.hasNext()).willAnswer(inv -> iterator.hasNext());
+        given(cursor.next()).willAnswer(inv -> iterator.next());
+        given(redisTemplate.scan(any(ScanOptions.class))).willReturn(cursor);
 
         // When
         List<Long> result = presenceService.getTypingUsers(100L);

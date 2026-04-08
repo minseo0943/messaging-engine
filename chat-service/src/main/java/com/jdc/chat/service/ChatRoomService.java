@@ -10,6 +10,10 @@ import com.jdc.chat.domain.entity.MessageType;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.chat.publisher.OutboxEventPublisher;
+import com.jdc.common.constant.KafkaTopics;
+import com.jdc.common.event.ChatRoomCreatedEvent;
+import com.jdc.common.event.MemberChangedEvent;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
     private final ChatRoomMemberRepository chatRoomMemberRepository;
     private final MessageRepository messageRepository;
+    private final OutboxEventPublisher outboxEventPublisher;
 
     @Transactional
     public ChatRoomResponse createChatRoom(CreateChatRoomRequest request) {
@@ -56,6 +61,14 @@ public class ChatRoomService {
         log.info("채팅방 생성 [roomId={}, name={}, creatorId={}, members={}]",
                 chatRoom.getId(), chatRoom.getName(), request.creatorId(),
                 chatRoom.getMembers().size());
+
+        List<Long> allMemberIds = chatRoom.getMembers().stream()
+                .map(ChatRoomMember::getUserId)
+                .toList();
+        outboxEventPublisher.saveEvent("ChatRoom", String.valueOf(chatRoom.getId()),
+                KafkaTopics.CHATROOM_CREATED, String.valueOf(chatRoom.getId()),
+                new ChatRoomCreatedEvent(chatRoom.getId(), chatRoom.getName(),
+                        chatRoom.getDescription(), request.creatorId(), allMemberIds));
 
         return ChatRoomResponse.from(chatRoom);
     }
@@ -103,6 +116,12 @@ public class ChatRoomService {
             messageRepository.save(sysMsg);
         }
 
+        if (!invitedIds.isEmpty()) {
+            outboxEventPublisher.saveEvent("ChatRoom", String.valueOf(roomId),
+                    KafkaTopics.CHATROOM_MEMBER_CHANGED, String.valueOf(roomId),
+                    new MemberChangedEvent(roomId, invitedIds, MemberChangedEvent.ActionType.INVITED));
+        }
+
         log.info("채팅방 초대 [roomId={}, inviterId={}, invited={}명]",
                 roomId, request.inviterId(), invitedIds.size());
 
@@ -127,6 +146,10 @@ public class ChatRoomService {
                 .type(MessageType.SYSTEM)
                 .build();
         messageRepository.save(sysMsg);
+
+        outboxEventPublisher.saveEvent("ChatRoom", String.valueOf(roomId),
+                KafkaTopics.CHATROOM_MEMBER_CHANGED, String.valueOf(roomId),
+                new MemberChangedEvent(roomId, List.of(userId), MemberChangedEvent.ActionType.LEFT));
 
         log.info("채팅방 나가기 [roomId={}, userId={}, nickname={}]", roomId, userId, nickname);
     }

@@ -142,13 +142,12 @@ public class GatewayRouter {
                     .tag("status", String.valueOf(proxyResponse.getStatusCode().value()))
                     .register(meterRegistry));
 
-            // WebSocket broadcast: 메시지 전송/삭제/초대/나가기 성공 시 해당 채팅방에 실시간 push
+            // WebSocket broadcast: 초대/나가기는 별도 WebSocket consumer가 없으므로 HTTP 경로에서 직접 broadcast
+            // 메시지 전송/수정/삭제는 Kafka Consumer(WebSocketEventConsumer)에서 broadcast하므로 여기서 제외 (중복 방지)
             if (proxyResponse.getStatusCode().is2xxSuccessful()) {
                 if ("POST".equals(request.getMethod())) {
-                    broadcastIfMessageSend(path, responseBody);
                     broadcastIfInvite(path, responseBody);
                 } else if ("DELETE".equals(request.getMethod())) {
-                    broadcastIfMessageDelete(path);
                     broadcastIfLeave(path);
                 }
             }

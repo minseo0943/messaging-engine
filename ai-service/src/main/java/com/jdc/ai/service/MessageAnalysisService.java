@@ -16,6 +16,7 @@ public class MessageAnalysisService {
     private final SpamDetectionService spamDetectionService;
     private final PriorityClassifier priorityClassifier;
     private final MessageSummaryService messageSummaryService;
+    private final MeterRegistry meterRegistry;
     private final Counter spamCounter;
     private final Counter cleanCounter;
 
@@ -26,6 +27,7 @@ public class MessageAnalysisService {
         this.spamDetectionService = spamDetectionService;
         this.priorityClassifier = priorityClassifier;
         this.messageSummaryService = messageSummaryService;
+        this.meterRegistry = meterRegistry;
         this.spamCounter = Counter.builder("ai.analysis.spam.detected")
                 .description("Number of spam messages detected")
                 .register(meterRegistry);
@@ -38,6 +40,10 @@ public class MessageAnalysisService {
         SpamAnalysisResult spamResult = spamDetectionService.analyze(event.getContent());
         PriorityLevel priority = priorityClassifier.classify(event.getContent());
         String summary = messageSummaryService.summarize(event.getContent());
+
+        // 우선순위 분포 메트릭 기록
+        meterRegistry.counter("ai.analysis.priority",
+                "level", priority.name()).increment();
 
         if (spamResult.isSpam()) {
             spamCounter.increment();

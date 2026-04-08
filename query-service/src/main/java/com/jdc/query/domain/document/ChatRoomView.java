@@ -17,6 +17,7 @@ public class ChatRoomView {
     private String id;
 
     private Long chatRoomId;
+    @Setter
     private String roomName;
 
     @Setter

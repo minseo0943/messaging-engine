@@ -2,6 +2,7 @@ package com.jdc.notification.consumer;
 
 import com.jdc.common.constant.KafkaTopics;
 import com.jdc.common.event.MessageSentEvent;
+import com.jdc.common.event.SpamDetectedEvent;
 import com.jdc.notification.domain.dto.NotificationMessage;
 import com.jdc.notification.service.NotificationRouter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -65,6 +66,35 @@ public class MessageNotificationConsumer {
 
         } catch (Exception e) {
             log.error("알림 처리 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @KafkaListener(
+            topics = KafkaTopics.MESSAGE_SPAM_DETECTED,
+            groupId = "${spring.kafka.consumer.group-id:notification-service}",
+            containerFactory = "kafkaListenerContainerFactory"
+    )
+    public void consumeSpam(@Payload SpamDetectedEvent event,
+                            @Header(KafkaHeaders.RECEIVED_PARTITION) int partition,
+                            @Header(KafkaHeaders.OFFSET) long offset,
+                            Acknowledgment ack) {
+        log.info("스팸 알림 이벤트 수신 [partition={}, offset={}, messageId={}]",
+                partition, offset, event.getMessageId());
+
+        try {
+            NotificationMessage message = new NotificationMessage(
+                    event.getChatRoomId(),
+                    0L,
+                    "시스템",
+                    "[스팸 감지] messageId=" + event.getMessageId() + ", 사유: " + event.getReason()
+            );
+
+            idempotentProcessor.processIfNew(event.getEventId(), "spam-notification",
+                    () -> notificationRouter.route(message));
+            ack.acknowledge();
+        } catch (Exception e) {
+            log.error("스팸 알림 처리 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage(), e);
             throw e;
         }
     }

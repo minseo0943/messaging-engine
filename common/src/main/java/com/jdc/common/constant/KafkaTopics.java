@@ -11,5 +11,8 @@ public final class KafkaTopics {
     public static final String MESSAGE_REACTION = "message.reaction";
     public static final String MESSAGE_DELIVERED = "message.delivered";
     public static final String MESSAGE_SPAM_DETECTED = "message.spam-detected";
+    public static final String MESSAGE_DELETED = "message.deleted";
     public static final String PRESENCE_CHANGE = "presence.change";
+    public static final String CHATROOM_CREATED = "chatroom.created";
+    public static final String CHATROOM_MEMBER_CHANGED = "chatroom.member-changed";
 }

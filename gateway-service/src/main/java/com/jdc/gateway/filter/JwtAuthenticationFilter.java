@@ -39,12 +39,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 request.setAttribute("username", username);
 
                 log.debug("JWT 인증 성공 [userId={}, username={}]", userId, username);
-            } else if (jwtTokenProvider.isExpired(token)) {
+            } else {
+                // 유효하지 않은 토큰 (만료, 서명 위조, 형식 오류 등) → 401
+                String errorCode = jwtTokenProvider.isExpired(token) ? "token_expired" : "token_invalid";
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                 response.setContentType(MediaType.APPLICATION_JSON_VALUE);
                 response.setCharacterEncoding("UTF-8");
                 response.getWriter().write(objectMapper.writeValueAsString(
-                        ApiResponse.error("token_expired")));
+                        ApiResponse.error(errorCode)));
                 return;
             }
         }

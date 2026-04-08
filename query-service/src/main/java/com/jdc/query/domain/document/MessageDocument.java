@@ -32,6 +32,7 @@ public class MessageDocument {
     @Builder.Default
     @Setter private List<ReactionEntry> reactions = new ArrayList<>();
 
+    @Setter private boolean deleted;
     @Setter private String spamStatus;
     @Setter private String spamReason;
     @Setter private Double spamScore;

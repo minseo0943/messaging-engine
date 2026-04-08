@@ -8,6 +8,7 @@ import com.jdc.chat.domain.entity.ChatRoomMember;
 import com.jdc.chat.domain.repository.ChatRoomMemberRepository;
 import com.jdc.chat.domain.repository.ChatRoomRepository;
 import com.jdc.chat.domain.repository.MessageRepository;
+import com.jdc.chat.publisher.OutboxEventPublisher;
 import com.jdc.common.exception.CustomException;
 import com.jdc.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +38,9 @@ class ChatRoomServiceTest {
 
     @Mock
     private MessageRepository messageRepository;
+
+    @Mock
+    private OutboxEventPublisher outboxEventPublisher;
 
     @InjectMocks
     private ChatRoomService chatRoomService;
