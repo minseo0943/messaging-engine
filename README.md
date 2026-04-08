@@ -183,13 +183,41 @@ k6 run load-test/send-message.js
 - Presence: `http://localhost:8083/swagger-ui.html`
 - AI: `http://localhost:8085/swagger-ui.html`
 
-## Monitoring
+## Monitoring & Observability
 
 | 도구 | URL | 용도 |
 |------|-----|------|
 | Grafana | `http://localhost:3000` (admin/admin) | 대시보드 (TPS, 레이턴시, 에러율, JVM, Kafka Lag) |
-| Prometheus | `http://localhost:9090` | 메트릭 수집 |
-| Jaeger | `http://localhost:16686` | 분산 트레이싱 |
+| Prometheus | `http://localhost:9090` | 메트릭 수집 + 알림 규칙 |
+| Jaeger | `http://localhost:16686` | 분산 트레이싱 (메시지 하나의 6개 서비스 경유 추적) |
+
+### Grafana 대시보드 (2개)
+
+- **messaging-engine**: 서비스별 HTTP TPS, p95/p99 레이턴시, 에러율, JVM 힙 사용량
+- **kafka-pipeline**: Kafka Consumer lag, E2E 이벤트 처리 지연, Outbox 미발행 이벤트 수
+
+### Prometheus 알림 규칙 (6개 그룹)
+
+| 알림 | 조건 | 심각도 |
+|------|------|--------|
+| ServiceDown | 서비스 1분 이상 무응답 | critical |
+| HighErrorRate5xx | 5xx 에러율 > 5% (2분 지속) | critical |
+| HighP99Latency | p99 > 2초 (3분 지속) | warning |
+| KafkaConsumerLagHigh | Consumer lag > 1,000건 (5분) | warning |
+| OutboxUnpublishedHigh | 미발행 이벤트 > 100건 (3분) | warning |
+| HighJvmHeapUsage | 힙 사용률 > 90% (5분) | warning |
+
+### 분산 트레이싱 (Jaeger)
+
+각 서비스에 OpenTelemetry Java Agent가 적용되어, 메시지 하나가 발행되고 소비되는 전체 경로를 추적할 수 있습니다.
+
+```
+Client → Gateway → chat-service → Kafka → query-service
+                                        → notification-service
+                                        → ai-service
+```
+
+Correlation ID가 HTTP → MDC → Outbox → Kafka Header로 전파되어, 하나의 요청에 대한 모든 로그를 추적할 수 있습니다.
 
 ## Key Design Decisions
 

@@ -16,4 +16,10 @@ public interface EventOutboxRepository extends JpaRepository<EventOutbox, Long> 
     @Modifying
     @Query("UPDATE EventOutbox e SET e.published = true, e.publishedAt = :now WHERE e.id IN :ids")
     int markAsPublished(@Param("ids") List<Long> ids, @Param("now") Instant now);
+
+    @Modifying
+    @Query("DELETE FROM EventOutbox e WHERE e.published = true AND e.publishedAt < :before")
+    int deletePublishedBefore(@Param("before") Instant before);
+
+    long countByPublishedFalse();
 }

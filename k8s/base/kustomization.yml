@@ -7,6 +7,9 @@ resources:
   - namespace.yml
   - configmap.yml
   - secret.yml
+  # Infrastructure
+  - infra/
+  # Application Services
   - gateway-service.yml
   - chat-service.yml
   - query-service.yml

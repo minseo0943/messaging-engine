@@ -113,6 +113,27 @@ groups:
           summary: "{{ $labels.topic }} 이벤트 E2E 처리 지연 10초 초과"
           description: "{{ $labels.topic }} 토픽의 p99 E2E lag: {{ $value | humanizeDuration }}"
 
+  # ──────────────── Outbox ────────────────
+  - name: outbox
+    rules:
+      - alert: OutboxUnpublishedHigh
+        expr: outbox_unpublished_count > 100
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox 미발행 이벤트 100건 초과"
+          description: "미발행 이벤트: {{ $value }}건. Kafka 브로커 장애 또는 OutboxPoller 중단 가능성."
+
+      - alert: OutboxUnpublishedCritical
+        expr: outbox_unpublished_count > 1000
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox 미발행 이벤트 1000건 초과 — Kafka 장애 의심"
+          description: "미발행 이벤트: {{ $value }}건. Kafka 브로커 상태를 즉시 확인하세요."
+
   # ──────────────── JVM / 리소스 ────────────────
   - name: jvm_resources
     rules:
