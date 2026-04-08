@@ -25,13 +25,21 @@ class MessageEventConsumerTest {
     private MessageDocumentRepository messageDocumentRepository;
 
     @Mock
+    private IdempotentEventProcessor idempotentProcessor;
+
+    @Mock
     private Acknowledgment ack;
 
     private MessageEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new MessageEventConsumer(projectionService, messageDocumentRepository, new SimpleMeterRegistry());
+        consumer = new MessageEventConsumer(projectionService, messageDocumentRepository, idempotentProcessor, new SimpleMeterRegistry());
+        willAnswer(invocation -> {
+            Runnable processor = invocation.getArgument(2);
+            processor.run();
+            return true;
+        }).given(idempotentProcessor).processIfNew(anyString(), anyString(), any(Runnable.class));
     }
 
     @Test

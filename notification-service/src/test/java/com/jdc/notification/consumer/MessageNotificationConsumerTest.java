@@ -24,13 +24,21 @@ class MessageNotificationConsumerTest {
     private NotificationRouter notificationRouter;
 
     @Mock
+    private IdempotentEventProcessor idempotentProcessor;
+
+    @Mock
     private Acknowledgment ack;
 
     private MessageNotificationConsumer consumer;
 
     @BeforeEach
     void setUp() {
-        consumer = new MessageNotificationConsumer(notificationRouter, new SimpleMeterRegistry());
+        consumer = new MessageNotificationConsumer(notificationRouter, idempotentProcessor, new SimpleMeterRegistry());
+        willAnswer(invocation -> {
+            Runnable processor = invocation.getArgument(2);
+            processor.run();
+            return true;
+        }).given(idempotentProcessor).processIfNew(anyString(), anyString(), any(Runnable.class));
     }
 
     @Test

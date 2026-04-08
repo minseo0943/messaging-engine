@@ -26,14 +26,17 @@ public class MessageEventConsumer {
 
     private final MessageProjectionService projectionService;
     private final MessageDocumentRepository messageDocumentRepository;
+    private final IdempotentEventProcessor idempotentProcessor;
     private final Timer projectionTimer;
     private final MeterRegistry meterRegistry;
 
     public MessageEventConsumer(MessageProjectionService projectionService,
                                 MessageDocumentRepository messageDocumentRepository,
+                                IdempotentEventProcessor idempotentProcessor,
                                 MeterRegistry meterRegistry) {
         this.projectionService = projectionService;
         this.messageDocumentRepository = messageDocumentRepository;
+        this.idempotentProcessor = idempotentProcessor;
         this.meterRegistry = meterRegistry;
         this.projectionTimer = Timer.builder("messaging.event.projection.duration")
                 .description("Time to project a message event into read model")
@@ -55,16 +58,19 @@ public class MessageEventConsumer {
                 event.getMessageId(), event.getChatRoomId());
 
         try {
-            projectionTimer.record(() -> projectionService.projectMessage(event));
+            boolean processed = idempotentProcessor.processIfNew(
+                    event.getEventId(), "message-projection",
+                    () -> projectionTimer.record(() -> projectionService.projectMessage(event)));
+
             ack.acknowledge();
 
-            // 이벤트 발행 → 소비 완료까지의 지연 시간 기록
-            Duration eventLag = Duration.between(event.getTimestamp(), Instant.now());
-            meterRegistry.timer("messaging.event.end_to_end.lag",
-                    "topic", KafkaTopics.MESSAGE_SENT).record(eventLag);
-
-            log.info("이벤트 처리 완료 [messageId={}, lagMs={}]",
-                    event.getMessageId(), eventLag.toMillis());
+            if (processed) {
+                Duration eventLag = Duration.between(event.getTimestamp(), Instant.now());
+                meterRegistry.timer("messaging.event.end_to_end.lag",
+                        "topic", KafkaTopics.MESSAGE_SENT).record(eventLag);
+                log.info("이벤트 처리 완료 [messageId={}, lagMs={}]",
+                        event.getMessageId(), eventLag.toMillis());
+            }
         } catch (Exception e) {
             log.error("이벤트 처리 실패 [messageId={}]: {}", event.getMessageId(), e.getMessage(), e);
             throw e;
@@ -84,14 +90,15 @@ public class MessageEventConsumer {
                 event.getMessageId(), partition, offset);
 
         try {
-            messageDocumentRepository.findByMessageId(event.getMessageId())
-                    .ifPresentOrElse(doc -> {
-                        doc.setContent(event.getNewContent());
-                        doc.setEdited(true);
-                        doc.setEditedAt(event.getTimestamp());
-                        messageDocumentRepository.save(doc);
-                        log.info("메시지 수정 프로젝션 완료 [messageId={}]", event.getMessageId());
-                    }, () -> log.warn("수정 대상 도큐먼트 없음 [messageId={}]", event.getMessageId()));
+            idempotentProcessor.processIfNew(event.getEventId(), "message-edit", () ->
+                    messageDocumentRepository.findByMessageId(event.getMessageId())
+                            .ifPresentOrElse(doc -> {
+                                doc.setContent(event.getNewContent());
+                                doc.setEdited(true);
+                                doc.setEditedAt(event.getTimestamp());
+                                messageDocumentRepository.save(doc);
+                                log.info("메시지 수정 프로젝션 완료 [messageId={}]", event.getMessageId());
+                            }, () -> log.warn("수정 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
 
             ack.acknowledge();
         } catch (Exception e) {
@@ -113,29 +120,30 @@ public class MessageEventConsumer {
                 event.getMessageId(), event.getAction(), partition, offset);
 
         try {
-            messageDocumentRepository.findByMessageId(event.getMessageId())
-                    .ifPresentOrElse(doc -> {
-                        var reactions = doc.getReactions();
-                        if (reactions == null) {
-                            reactions = new java.util.ArrayList<>();
-                        }
+            idempotentProcessor.processIfNew(event.getEventId(), "message-reaction", () ->
+                    messageDocumentRepository.findByMessageId(event.getMessageId())
+                            .ifPresentOrElse(doc -> {
+                                var reactions = doc.getReactions();
+                                if (reactions == null) {
+                                    reactions = new java.util.ArrayList<>();
+                                }
 
-                        if (event.getAction() == MessageReactionEvent.ActionType.ADDED) {
-                            reactions.add(MessageDocument.ReactionEntry.builder()
-                                    .userId(event.getUserId())
-                                    .emoji(event.getEmoji())
-                                    .build());
-                        } else {
-                            reactions.removeIf(r ->
-                                    r.getUserId().equals(event.getUserId())
-                                    && r.getEmoji().equals(event.getEmoji()));
-                        }
+                                if (event.getAction() == MessageReactionEvent.ActionType.ADDED) {
+                                    reactions.add(MessageDocument.ReactionEntry.builder()
+                                            .userId(event.getUserId())
+                                            .emoji(event.getEmoji())
+                                            .build());
+                                } else {
+                                    reactions.removeIf(r ->
+                                            r.getUserId().equals(event.getUserId())
+                                            && r.getEmoji().equals(event.getEmoji()));
+                                }
 
-                        doc.setReactions(reactions);
-                        messageDocumentRepository.save(doc);
-                        log.info("리액션 프로젝션 완료 [messageId={}, action={}]",
-                                event.getMessageId(), event.getAction());
-                    }, () -> log.warn("리액션 대상 도큐먼트 없음 [messageId={}]", event.getMessageId()));
+                                doc.setReactions(reactions);
+                                messageDocumentRepository.save(doc);
+                                log.info("리액션 프로젝션 완료 [messageId={}, action={}]",
+                                        event.getMessageId(), event.getAction());
+                            }, () -> log.warn("리액션 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
 
             ack.acknowledge();
         } catch (Exception e) {

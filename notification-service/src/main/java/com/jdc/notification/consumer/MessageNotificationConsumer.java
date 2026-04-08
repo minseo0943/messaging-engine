@@ -23,10 +23,14 @@ import java.time.Instant;
 public class MessageNotificationConsumer {
 
     private final NotificationRouter notificationRouter;
+    private final IdempotentEventProcessor idempotentProcessor;
     private final MeterRegistry meterRegistry;
 
-    public MessageNotificationConsumer(NotificationRouter notificationRouter, MeterRegistry meterRegistry) {
+    public MessageNotificationConsumer(NotificationRouter notificationRouter,
+                                       IdempotentEventProcessor idempotentProcessor,
+                                       MeterRegistry meterRegistry) {
         this.notificationRouter = notificationRouter;
+        this.idempotentProcessor = idempotentProcessor;
         this.meterRegistry = meterRegistry;
     }
 
@@ -50,7 +54,8 @@ public class MessageNotificationConsumer {
                     event.getContent()
             );
 
-            notificationRouter.route(message);
+            idempotentProcessor.processIfNew(event.getEventId(), "notification",
+                    () -> notificationRouter.route(message));
             ack.acknowledge();
 
             Duration eventLag = Duration.between(event.getTimestamp(), Instant.now());

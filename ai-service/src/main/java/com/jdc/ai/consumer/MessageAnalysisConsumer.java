@@ -24,13 +24,16 @@ public class MessageAnalysisConsumer {
 
     private final MessageAnalysisService analysisService;
     private final SpamEventPublisher spamEventPublisher;
+    private final IdempotentEventProcessor idempotentProcessor;
     private final Timer analysisTimer;
 
     public MessageAnalysisConsumer(MessageAnalysisService analysisService,
                                    SpamEventPublisher spamEventPublisher,
+                                   IdempotentEventProcessor idempotentProcessor,
                                    MeterRegistry meterRegistry) {
         this.analysisService = analysisService;
         this.spamEventPublisher = spamEventPublisher;
+        this.idempotentProcessor = idempotentProcessor;
         this.analysisTimer = Timer.builder("ai.analysis.duration")
                 .description("Time to analyze a single message")
                 .register(meterRegistry);
@@ -49,17 +52,19 @@ public class MessageAnalysisConsumer {
                 partition, offset, event.getMessageId());
 
         try {
-            MessageAnalysisResult result = analysisTimer.record(
-                    () -> analysisService.analyze(event));
+            idempotentProcessor.processIfNew(event.getEventId(), "ai-analysis", () -> {
+                MessageAnalysisResult result = analysisTimer.record(
+                        () -> analysisService.analyze(event));
 
-            if (result.spam().isSpam()) {
-                spamEventPublisher.publish(new SpamDetectedEvent(
-                        result.messageId(),
-                        result.chatRoomId(),
-                        result.spam().reason(),
-                        result.spam().score()
-                ));
-            }
+                if (result.spam().isSpam()) {
+                    spamEventPublisher.publish(new SpamDetectedEvent(
+                            result.messageId(),
+                            result.chatRoomId(),
+                            result.spam().reason(),
+                            result.spam().score()
+                    ));
+                }
+            });
 
             ack.acknowledge();
         } catch (Exception e) {
