@@ -152,7 +152,7 @@ docker compose up -d kafka mysql mongodb redis elasticsearch jaeger prometheus g
 ```
       ▲ E2E (~80개)        — 전체 서비스 연동, CQRS 파이프라인, 스팸 탐지 파이프라인
       ■ 통합 (6개)          — Testcontainers (MySQL + Kafka + MongoDB)
-      █ 단위 (122개)        — Service, Consumer, Controller, Rule 비즈니스 로직
+      █ 단위 (140개)        — Service, Consumer, Controller, Rule 비즈니스 로직
 ```
 
 리스크 기반 설계: Critical Path(메시지→Kafka→MongoDB→스팸)에 단위+E2E 양쪽에서 교차 검증.  
