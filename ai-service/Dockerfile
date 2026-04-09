@@ -7,4 +7,11 @@ COPY ai-service/build/libs/ai-service-0.0.1-SNAPSHOT.jar app.jar
 USER appuser
 EXPOSE 8085
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", \
+  "-XX:+UseG1GC", \
+  "-XX:MaxRAMPercentage=75.0", \
+  "-XX:InitialRAMPercentage=50.0", \
+  "-XX:+HeapDumpOnOutOfMemoryError", \
+  "-XX:HeapDumpPath=/tmp/heapdump.hprof", \
+  "-Djava.security.egd=file:/dev/./urandom", \
+  "-jar", "app.jar"]
