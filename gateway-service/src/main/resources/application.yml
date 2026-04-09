@@ -22,6 +22,11 @@ oauth2:
 
 # Gateway
 gateway:
+  cors:
+    allowed-origins: http://localhost:3000
+    allowed-methods: GET,POST,PUT,PATCH,DELETE,OPTIONS
+    allow-credentials: true
+    max-age: 3600
   rate-limit:
     max-requests: 300              # 미인증 (IP 기반)
     authenticated-max-requests: 500 # 인증 사용자 (userId 기반)
@@ -85,6 +90,8 @@ spring:
       port: ${REDIS_PORT:6379}
 
 gateway:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   services:
     chat-service: http://${CHAT_SERVICE_HOST:chat-service}:8081
     query-service: http://${QUERY_SERVICE_HOST:query-service}:8082
