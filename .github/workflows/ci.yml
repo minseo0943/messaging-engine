@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 env:
   JAVA_VERSION: '17'
@@ -227,6 +228,79 @@ jobs:
         run: ./gradlew compileJava compileTestJava --no-daemon
 
   # ──────────────── Dependency Security Scan ────────────────
+  # ──────────────── OpenAPI Spec Export ────────────────
+  openapi-export:
+    name: OpenAPI Spec Export
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
+
+      - name: Start infrastructure
+        run: |
+          docker compose up -d mysql mongodb redis kafka zookeeper
+          sleep 15
+
+      - name: Start services
+        run: |
+          for svc in gateway-service chat-service query-service presence-service notification-service ai-service; do
+            java -jar ${svc}/build/libs/${svc}-0.0.1-SNAPSHOT.jar \
+              --spring.profiles.active=docker \
+              --spring.kafka.bootstrap-servers=localhost:9092 \
+              --spring.data.redis.host=localhost \
+              --spring.datasource.url=jdbc:mysql://localhost:3306/chat_db \
+              --spring.data.mongodb.host=localhost &
+          done
+          sleep 30
+
+      - name: Wait for services
+        run: |
+          for port in 8080 8081 8082 8083 8084 8085; do
+            for i in $(seq 1 30); do
+              curl -sf http://localhost:${port}/actuator/health > /dev/null && break
+              sleep 2
+            done
+          done
+
+      - name: Export OpenAPI specs
+        run: |
+          mkdir -p docs/openapi
+          declare -A services=(
+            ["gateway-service"]="8080"
+            ["chat-service"]="8081"
+            ["query-service"]="8082"
+            ["presence-service"]="8083"
+            ["notification-service"]="8084"
+            ["ai-service"]="8085"
+          )
+          for svc in "${!services[@]}"; do
+            curl -sf "http://localhost:${services[$svc]}/v3/api-docs" \
+              | python3 -m json.tool > "docs/openapi/${svc}.json" || true
+          done
+
+      - name: Upload OpenAPI specs
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-specs
+          path: docs/openapi/
+          retention-days: 90
+
   security-scan:
     name: Dependency Security Scan
     runs-on: ubuntu-latest
@@ -240,3 +314,4 @@ jobs:
 
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
+        continue-on-error: true

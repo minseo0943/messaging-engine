@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 
 @Slf4j
@@ -30,7 +32,12 @@ public class RefreshTokenStore {
 
     public boolean validate(Long userId, String refreshToken) {
         String stored = get(userId);
-        return refreshToken.equals(stored);
+        if (stored == null || refreshToken == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                stored.getBytes(StandardCharsets.UTF_8),
+                refreshToken.getBytes(StandardCharsets.UTF_8));
     }
 
     public void revoke(Long userId) {

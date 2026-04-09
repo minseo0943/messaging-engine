@@ -1,0 +1,170 @@
+# ──────────────── Global ────────────────
+global:
+  namespace: messaging-engine
+  imageRegistry: ghcr.io/messaging-engine
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  springProfile: docker
+
+# ──────────────── Application Services ────────────────
+services:
+  gateway:
+    enabled: true
+    name: gateway-service
+    port: 8080
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+
+  chat:
+    enabled: true
+    name: chat-service
+    port: 8081
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    initContainers:
+      waitForMySQL: true
+      waitForKafka: true
+
+  query:
+    enabled: true
+    name: query-service
+    port: 8082
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+    initContainers:
+      waitForKafka: true
+
+  presence:
+    enabled: true
+    name: presence-service
+    port: 8083
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 192Mi
+
+  notification:
+    enabled: true
+    name: notification-service
+    port: 8084
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 192Mi
+
+  ai:
+    enabled: true
+    name: ai-service
+    port: 8085
+    replicas: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 192Mi
+
+# ──────────────── Infrastructure ────────────────
+infra:
+  mysql:
+    enabled: true
+    host: mysql
+    port: 3306
+    persistence:
+      enabled: false
+      size: 5Gi
+      storageClass: ""
+  mongodb:
+    enabled: true
+    host: mongodb
+    port: 27017
+    persistence:
+      enabled: false
+      size: 5Gi
+      storageClass: ""
+  redis:
+    enabled: true
+    host: redis
+    port: 6379
+    persistence:
+      enabled: false
+      size: 1Gi
+      storageClass: ""
+  kafka:
+    enabled: true
+    bootstrapServers: kafka:9092
+  elasticsearch:
+    enabled: false
+    host: elasticsearch
+    port: 9200
+
+# ──────────────── Config ────────────────
+config:
+  tracingEnabled: "false"
+  jaegerHost: jaeger
+  slackEnabled: "false"
+  esEnabled: "false"
+
+# ──────────────── Secrets ────────────────
+secrets:
+  mysqlRootPassword: root1234
+  mysqlUser: chat_user
+  mysqlPassword: chat_pass
+  mongoUsername: mongo_user
+  mongoPassword: mongo_pass
+  jwtSecret: messaging-engine-jwt-secret-key-must-be-at-least-32-bytes-long
+
+# ──────────────── Ingress ────────────────
+ingress:
+  enabled: true
+  className: nginx
+  host: messaging.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+
+# ──────────────── Network Policy ────────────────
+networkPolicy:
+  enabled: false
+
+# ──────────────── ServiceMonitor (Prometheus Operator) ────────────────
+serviceMonitor:
+  enabled: false
+  interval: 15s
+
+# ──────────────── Probes ────────────────
+probes:
+  readiness:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+  liveness:
+    initialDelaySeconds: 60
+    periodSeconds: 15

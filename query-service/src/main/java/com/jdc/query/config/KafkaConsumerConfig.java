@@ -1,6 +1,7 @@
 package com.jdc.query.config;
 
 import com.jdc.common.event.BaseEvent;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Value;
@@ -9,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.MicrometerConsumerListener;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -29,9 +31,11 @@ public class KafkaConsumerConfig {
     private String groupId;
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final MeterRegistry meterRegistry;
 
-    public KafkaConsumerConfig(KafkaTemplate<String, Object> kafkaTemplate) {
+    public KafkaConsumerConfig(KafkaTemplate<String, Object> kafkaTemplate, MeterRegistry meterRegistry) {
         this.kafkaTemplate = kafkaTemplate;
+        this.meterRegistry = meterRegistry;
     }
 
     @Bean
@@ -46,7 +50,9 @@ public class KafkaConsumerConfig {
         props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.jdc.*");
         props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, true);
         props.put(JsonDeserializer.VALUE_DEFAULT_TYPE, BaseEvent.class.getName());
-        return new DefaultKafkaConsumerFactory<>(props);
+        DefaultKafkaConsumerFactory<String, BaseEvent> factory = new DefaultKafkaConsumerFactory<>(props);
+        factory.addListener(new MicrometerConsumerListener<>(meterRegistry));
+        return factory;
     }
 
     @Bean

@@ -39,6 +39,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Value("${gateway.rate-limit.authenticated-max-requests:500}")
     private int authenticatedMaxRequests;
 
+    @Value("${gateway.rate-limit.trust-proxy:false}")
+    private boolean trustProxy;
+
     public RateLimitFilter(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
         this.rateLimitScript = new DefaultRedisScript<>();
@@ -109,9 +112,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private String getClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();
+        if (trustProxy) {
+            String xff = request.getHeader("X-Forwarded-For");
+            if (xff != null && !xff.isBlank()) {
+                return xff.split(",")[0].trim();
+            }
         }
         return request.getRemoteAddr();
     }

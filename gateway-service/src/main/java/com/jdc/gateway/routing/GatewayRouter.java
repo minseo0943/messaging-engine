@@ -34,6 +34,8 @@ import java.util.regex.Pattern;
 @Component
 public class GatewayRouter {
 
+    private static final long MAX_REQUEST_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+
     private static final Pattern MESSAGE_SEND_PATTERN =
             Pattern.compile("^/api/chat/rooms/(\\d+)/messages$");
     private static final Pattern MESSAGE_DELETE_PATTERN =
@@ -109,7 +111,20 @@ public class GatewayRouter {
 
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
+            long contentLength = request.getContentLengthLong();
+            if (contentLength > MAX_REQUEST_BODY_SIZE) {
+                response.setStatus(413);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"요청 본문이 너무 큽니다 (최대 10MB)\"}");
+                return;
+            }
             byte[] body = request.getInputStream().readAllBytes();
+            if (body.length > MAX_REQUEST_BODY_SIZE) {
+                response.setStatus(413);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"code\":\"PAYLOAD_TOO_LARGE\",\"message\":\"요청 본문이 너무 큽니다 (최대 10MB)\"}");
+                return;
+            }
             HttpMethod method = HttpMethod.valueOf(request.getMethod());
 
             // 서비스별 Circuit Breaker + Retry 적용

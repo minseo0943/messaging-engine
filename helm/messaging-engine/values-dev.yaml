@@ -1,0 +1,13 @@
+# Dev environment overrides
+global:
+  imageTag: dev
+
+services:
+  gateway:
+    replicas: 2
+  chat:
+    replicas: 2
+
+config:
+  esEnabled: "true"
+  tracingEnabled: "true"

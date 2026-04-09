@@ -1,0 +1,78 @@
+{{- if .Values.infra.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: redis
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          {{- if .Values.infra.redis.persistence.enabled }}
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          {{- end }}
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      {{- if .Values.infra.redis.persistence.enabled }}
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: redis-data
+      {{- end }}
+{{- if .Values.infra.redis.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: {{ .Values.global.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.infra.redis.persistence.size }}
+  {{- if .Values.infra.redis.persistence.storageClass }}
+  storageClassName: {{ .Values.infra.redis.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  type: ClusterIP
+{{- end }}

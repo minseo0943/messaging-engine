@@ -1,0 +1,44 @@
+{{- $global := .Values.global -}}
+{{- $services := list
+  (dict "key" "gateway" "val" .Values.services.gateway)
+  (dict "key" "chat" "val" .Values.services.chat)
+  (dict "key" "query" "val" .Values.services.query)
+  (dict "key" "presence" "val" .Values.services.presence)
+  (dict "key" "notification" "val" .Values.services.notification)
+  (dict "key" "ai" "val" .Values.services.ai)
+-}}
+{{- range $svc := $services }}
+{{- if and $svc.val.enabled (hasKey $svc.val "autoscaling") $svc.val.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $svc.val.name }}
+  namespace: {{ $global.namespace }}
+  labels:
+    app: {{ $svc.val.name }}
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $svc.val.name }}
+  minReplicas: {{ $svc.val.autoscaling.minReplicas }}
+  maxReplicas: {{ $svc.val.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.val.autoscaling.targetCPUUtilization }}
+    {{- if $svc.val.autoscaling.targetMemoryUtilization }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ $svc.val.autoscaling.targetMemoryUtilization }}
+    {{- end }}
+{{- end }}
+{{- end }}

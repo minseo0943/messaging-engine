@@ -99,7 +99,10 @@ public class MessageEventConsumer {
                                 doc.setEditedAt(event.getTimestamp());
                                 messageDocumentRepository.save(doc);
                                 log.info("메시지 수정 프로젝션 완료 [messageId={}]", event.getMessageId());
-                            }, () -> log.warn("수정 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
+                            }, () -> {
+                                throw new IllegalStateException(
+                                        "수정 대상 도큐먼트 미프로젝션 [messageId=" + event.getMessageId() + "]");
+                            }));
 
             ack.acknowledge();
         } catch (Exception e) {
@@ -144,7 +147,10 @@ public class MessageEventConsumer {
                                 messageDocumentRepository.save(doc);
                                 log.info("리액션 프로젝션 완료 [messageId={}, action={}]",
                                         event.getMessageId(), event.getAction());
-                            }, () -> log.warn("리액션 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
+                            }, () -> {
+                                throw new IllegalStateException(
+                                        "리액션 대상 도큐먼트 미프로젝션 [messageId=" + event.getMessageId() + "]");
+                            }));
 
             ack.acknowledge();
         } catch (Exception e) {
@@ -173,7 +179,10 @@ public class MessageEventConsumer {
                                 doc.setContent("[삭제된 메시지]");
                                 messageDocumentRepository.save(doc);
                                 log.info("메시지 삭제 프로젝션 완료 [messageId={}]", event.getMessageId());
-                            }, () -> log.warn("삭제 대상 도큐먼트 없음 [messageId={}]", event.getMessageId())));
+                            }, () -> {
+                                throw new IllegalStateException(
+                                        "삭제 대상 도큐먼트 미프로젝션 [messageId=" + event.getMessageId() + "]");
+                            }));
 
             ack.acknowledge();
         } catch (Exception e) {

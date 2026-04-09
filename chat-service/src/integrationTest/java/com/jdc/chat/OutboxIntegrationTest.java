@@ -89,8 +89,11 @@ class OutboxIntegrationTest {
         List<EventOutbox> outboxEvents = outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
         assertThat(outboxEvents).isNotEmpty();
 
-        EventOutbox outbox = outboxEvents.get(0);
-        assertThat(outbox.getAggregateType()).isEqualTo("Message");
+        // 채팅방 생성 시 ChatRoom 이벤트도 저장되므로, Message 타입만 필터링
+        EventOutbox outbox = outboxEvents.stream()
+                .filter(e -> "Message".equals(e.getAggregateType()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("Message 타입 outbox 이벤트가 없음"));
         assertThat(outbox.getEventType()).isEqualTo("MESSAGE_SENT");
         assertThat(outbox.getTopic()).isEqualTo("message.sent");
         assertThat(outbox.isPublished()).isFalse();

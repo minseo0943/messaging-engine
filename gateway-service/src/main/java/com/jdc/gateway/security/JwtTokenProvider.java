@@ -87,18 +87,27 @@ public class JwtTokenProvider {
     }
 
     public Claims getClaims(String token) {
-        return Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        try {
+            return Jwts.parser()
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+        } catch (JwtException e) {
+            log.warn("JWT Claims 파싱 실패: {}", e.getMessage());
+            return null;
+        }
     }
 
     public Long getUserId(String token) {
-        return Long.valueOf(getClaims(token).getSubject());
+        Claims claims = getClaims(token);
+        if (claims == null) return null;
+        return Long.valueOf(claims.getSubject());
     }
 
     public String getUsername(String token) {
-        return getClaims(token).get("username", String.class);
+        Claims claims = getClaims(token);
+        if (claims == null) return null;
+        return claims.get("username", String.class);
     }
 }

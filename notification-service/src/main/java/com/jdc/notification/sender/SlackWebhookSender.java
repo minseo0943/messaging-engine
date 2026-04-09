@@ -5,6 +5,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 import java.util.Map;
@@ -52,8 +55,17 @@ public class SlackWebhookSender implements NotificationSender {
 
             log.info("[Slack] 알림 전송 성공 [chatRoomId={}, sender={}]",
                     message.chatRoomId(), message.senderName());
+        } catch (HttpClientErrorException e) {
+            log.error("[Slack] 알림 전송 실패 (클라이언트 오류, 재시도 불필요) [chatRoomId={}, status={}]: {}",
+                    message.chatRoomId(), e.getStatusCode(), e.getMessage());
+        } catch (HttpServerErrorException e) {
+            log.warn("[Slack] 알림 전송 실패 (서버 오류, 재시도 가능) [chatRoomId={}, status={}]: {}",
+                    message.chatRoomId(), e.getStatusCode(), e.getMessage());
+        } catch (ResourceAccessException e) {
+            log.warn("[Slack] 알림 전송 실패 (네트워크 오류, 재시도 가능) [chatRoomId={}]: {}",
+                    message.chatRoomId(), e.getMessage());
         } catch (Exception e) {
-            log.error("[Slack] 알림 전송 실패 [chatRoomId={}]: {}",
+            log.error("[Slack] 알림 전송 실패 (알 수 없는 오류) [chatRoomId={}]: {}",
                     message.chatRoomId(), e.getMessage());
         }
     }

@@ -1,0 +1,46 @@
+name: Helm Chart Lint
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'helm/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'helm/**'
+
+permissions:
+  contents: read
+
+jobs:
+  helm-lint:
+    name: Helm Lint & Template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Lint chart (default values)
+        run: helm lint helm/messaging-engine/
+
+      - name: Lint chart (dev values)
+        run: helm lint helm/messaging-engine/ -f helm/messaging-engine/values-dev.yaml
+
+      - name: Lint chart (prod values)
+        run: helm lint helm/messaging-engine/ -f helm/messaging-engine/values-prod.yaml
+
+      - name: Template render (default)
+        run: helm template messaging helm/messaging-engine/ > /dev/null
+
+      - name: Template render (dev)
+        run: helm template messaging helm/messaging-engine/ -f helm/messaging-engine/values-dev.yaml > /dev/null
+
+      - name: Template render (prod)
+        run: helm template messaging helm/messaging-engine/ -f helm/messaging-engine/values-prod.yaml > /dev/null

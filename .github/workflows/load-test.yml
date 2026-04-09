@@ -1,0 +1,185 @@
+name: Load Test (K6)
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: 'Test scenario to run'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - e2e
+          - spike
+          - soak
+      duration:
+        description: 'Override test duration (e.g., 30s, 1m)'
+        required: false
+        type: string
+  # main 브랜치 push 시 smoke 테스트 자동 실행
+  push:
+    branches: [main]
+    paths:
+      - '*-service/**'
+      - 'common/**'
+      - 'docker-compose.yml'
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: '17'
+
+jobs:
+  load-test:
+    name: K6 Load Test (${{ github.event.inputs.scenario || 'smoke' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', 'gradle.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Build all modules (skip tests)
+        run: ./gradlew build -x test --no-daemon
+
+      - name: Start infrastructure with Docker Compose
+        run: |
+          docker compose up -d mysql kafka zookeeper mongodb redis
+          echo "Waiting for infrastructure to be healthy..."
+          sleep 15
+          docker compose ps
+
+      - name: Start application services
+        run: |
+          docker compose up -d --build \
+            gateway-service chat-service query-service \
+            presence-service notification-service ai-service
+          echo "Waiting for services to start..."
+          sleep 30
+
+      - name: Wait for services to be ready
+        run: |
+          for port in 8080 8081 8082 8083 8084 8085; do
+            echo "Checking port $port..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:$port/actuator/health > /dev/null 2>&1; then
+                echo "  Port $port is ready"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "  Port $port failed to start"
+                docker compose logs
+                exit 1
+              fi
+              sleep 2
+            done
+          done
+          echo "All services are ready!"
+
+      - name: Install K6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D68
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 -y
+
+      - name: Run K6 Smoke Test
+        if: github.event.inputs.scenario == 'smoke' || github.event.inputs.scenario == ''
+        run: |
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env CHAT_URL=http://localhost:8081 \
+            --env QUERY_URL=http://localhost:8082 \
+            --env PRESENCE_URL=http://localhost:8083 \
+            --out json=load-test/results/smoke-result.json \
+            --summary-export=load-test/results/smoke-summary.json \
+            load-test/e2e-scenario.js \
+            --duration 30s --vus 5
+        continue-on-error: true
+
+      - name: Run K6 E2E Scenario
+        if: github.event.inputs.scenario == 'e2e'
+        run: |
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env CHAT_URL=http://localhost:8081 \
+            --env QUERY_URL=http://localhost:8082 \
+            --env PRESENCE_URL=http://localhost:8083 \
+            --out json=load-test/results/e2e-result.json \
+            --summary-export=load-test/results/e2e-summary.json \
+            load-test/e2e-scenario.js
+        continue-on-error: true
+
+      - name: Run K6 Spike Test
+        if: github.event.inputs.scenario == 'spike'
+        run: |
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env CHAT_URL=http://localhost:8081 \
+            --env QUERY_URL=http://localhost:8082 \
+            --env PRESENCE_URL=http://localhost:8083 \
+            --out json=load-test/results/spike-result.json \
+            --summary-export=load-test/results/spike-summary.json \
+            load-test/spike-test.js
+        continue-on-error: true
+
+      - name: Run K6 Soak Test
+        if: github.event.inputs.scenario == 'soak'
+        run: |
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env CHAT_URL=http://localhost:8081 \
+            --env QUERY_URL=http://localhost:8082 \
+            --env PRESENCE_URL=http://localhost:8083 \
+            --out json=load-test/results/soak-result.json \
+            --summary-export=load-test/results/soak-summary.json \
+            load-test/soak-test.js
+        continue-on-error: true
+
+      - name: Upload K6 results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-results-${{ github.event.inputs.scenario || 'smoke' }}
+          path: load-test/results/
+          retention-days: 30
+
+      - name: Collect service logs on failure
+        if: failure()
+        run: |
+          mkdir -p load-test/results/logs
+          docker compose logs --tail=200 > load-test/results/logs/all-services.log 2>&1
+
+      - name: Upload service logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: service-logs
+          path: load-test/results/logs/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

@@ -1,0 +1,96 @@
+{{- if .Values.infra.mysql.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: mysql
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: chat_db
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: MYSQL_PASSWORD
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          {{- if .Values.infra.mysql.persistence.enabled }}
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          {{- end }}
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      {{- if .Values.infra.mysql.persistence.enabled }}
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-data
+      {{- end }}
+{{- if .Values.infra.mysql.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  namespace: {{ .Values.global.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.infra.mysql.persistence.size }}
+  {{- if .Values.infra.mysql.persistence.storageClass }}
+  storageClassName: {{ .Values.infra.mysql.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+  type: ClusterIP
+{{- end }}

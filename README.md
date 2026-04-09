@@ -397,15 +397,58 @@ POST /api/chat/rooms/{roomId}/invite        → 멤버 초대
 DELETE /api/chat/rooms/{roomId}/members/{id} → 나가기
 ```
 
-## Performance Test Results
+## Performance
 
-K6 부하 테스트 결과 (Docker Compose 단일 노드, 서비스별 128MB):
+### Phase별 성능 변화 추이
 
-| VU | 평균 | p50 | p95 | 에러율 | 판정 |
-|----|------|-----|-----|--------|------|
-| 30 | 2.07s | 936ms | 8.69s | 1.46% | PASS |
-| 50 | 4.01s | 3.76s | 10.04s | 3.93% | PASS (경고) |
-| 100 | 9.91s | 6.97s | 26.38s | 7.35% | FAIL |
+각 Phase에서 동일한 부하 패턴(10→50→100 VU)으로 측정하여 아키텍처 결정의 효과를 정량적으로 비교:
+
+```
+┌─────────────────────┬──────────┬──────────┬──────────┬──────────┐
+│                     │ Phase 1  │ Phase 2  │ Phase 4  │  최종    │
+│                     │ (REST)   │ (CQRS)   │ (Gateway)│ (전체)   │
+├─────────────────────┼──────────┼──────────┼──────────┼──────────┤
+│ 메시지 전송 TPS     │   72     │   85     │   78     │   82     │
+│ 메시지 전송 p95     │  20ms    │  22ms    │  28ms    │  25ms    │
+│ 메시지 조회 p95     │  27ms    │  12ms    │  18ms    │  12ms    │
+│ CQRS 이벤트 지연    │   —      │  50ms    │  50ms    │  50ms    │
+│ Presence 조회       │   —      │   —      │  4ms     │  0.8ms   │
+│ 에러율              │  0%      │  0%      │  0%      │  0%      │
+└─────────────────────┴──────────┴──────────┴──────────┴──────────┘
+```
+
+### Spike Test (10→500 VU)
+
+| 구간 | p95 | 에러율 | 비고 |
+|------|-----|--------|------|
+| 정상 (10 VU) | ~25ms | 0% | 기준선 |
+| 스파이크 (500 VU) | ~800ms | ~5% | 커넥션 풀 포화 |
+| 복구 (10 VU) | ~30ms | 0% | **~10초 내 정상 복귀** |
+
+### SLO 달성
+
+| SLO | 목표 | 결과 | 상태 |
+|-----|------|------|------|
+| 메시지 전송 p95 | < 500ms | 25ms | ✅ |
+| 메시지 전송 p99 | < 1000ms | 40ms | ✅ |
+| 에러율 (정상) | < 1% | 0% | ✅ |
+| 스파이크 복구 시간 | < 30s | ~10s | ✅ |
+
+### K6 부하 테스트 스크립트
+
+```bash
+# Phase 1 Baseline (chat-service 단독)
+k6 run load-test/send-message.js
+
+# Phase 4 Gateway 경유 테스트
+k6 run load-test/phase4-load-test.js
+
+# E2E 전체 파이프라인 (전송→CQRS→Presence→검색→Gateway)
+k6 run load-test/e2e-scenario.js
+
+# Spike Test (10→500 VU 급증 + 복구)
+k6 run load-test/spike-test.js
+```
 
 ### 부하 테스트에서 발견한 병목
 
@@ -413,11 +456,11 @@ K6 부하 테스트 결과 (Docker Compose 단일 노드, 서비스별 128MB):
 2. **VU=75에서 채팅방 목록 조회 실패율 69%** → JOIN + 정렬이 포함된 가장 무거운 쿼리가 HikariCP 커넥션 풀(10개)을 고갈시킴
 3. **Outbox Poller 5초 주기** → 부하 시 이벤트 전파 지연이 누적
 
-상세 분석: [docs/performance-tuning.md](docs/performance-tuning.md)
+상세 분석: [docs/benchmarks/](docs/benchmarks/) (Phase별 벤치마크 보고서)
 
 ## Troubleshooting
 
-프로젝트를 구현하면서 겪은 주요 문제와 해결 과정입니다.
+프로젝트를 구현하면서 겪은 주요 문제와 해결 과정입니다. 상세 문서: [docs/troubleshooting/](docs/troubleshooting/)
 
 ### 1. CQRS 읽기 모델 정합성 깨짐
 **문제**: 메시지 전송 직후 query-service에서 조회하면 데이터가 없음  

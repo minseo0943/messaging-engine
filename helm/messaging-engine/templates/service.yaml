@@ -1,0 +1,30 @@
+{{- $global := .Values.global -}}
+{{- $services := list
+  (dict "key" "gateway" "val" .Values.services.gateway)
+  (dict "key" "chat" "val" .Values.services.chat)
+  (dict "key" "query" "val" .Values.services.query)
+  (dict "key" "presence" "val" .Values.services.presence)
+  (dict "key" "notification" "val" .Values.services.notification)
+  (dict "key" "ai" "val" .Values.services.ai)
+-}}
+{{- range $svc := $services }}
+{{- if $svc.val.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.val.name }}
+  namespace: {{ $global.namespace }}
+  labels:
+    app: {{ $svc.val.name }}
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  selector:
+    app: {{ $svc.val.name }}
+  ports:
+    - port: {{ $svc.val.port }}
+      targetPort: {{ $svc.val.port }}
+      protocol: TCP
+  type: ClusterIP
+{{- end }}
+{{- end }}

@@ -1,0 +1,91 @@
+{{- if .Values.infra.mongodb.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: mongodb
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:7.0
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: MONGO_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: messaging-secrets
+                  key: MONGO_PASSWORD
+            - name: MONGO_INITDB_DATABASE
+              value: query_db
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          {{- if .Values.infra.mongodb.persistence.enabled }}
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+          {{- end }}
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--eval", "db.adminCommand('ping')"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      {{- if .Values.infra.mongodb.persistence.enabled }}
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: mongodb-data
+      {{- end }}
+{{- if .Values.infra.mongodb.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-data
+  namespace: {{ .Values.global.namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.infra.mongodb.persistence.size }}
+  {{- if .Values.infra.mongodb.persistence.storageClass }}
+  storageClassName: {{ .Values.infra.mongodb.persistence.storageClass }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: mongodb
+  ports:
+    - port: 27017
+      targetPort: 27017
+  type: ClusterIP
+{{- end }}
