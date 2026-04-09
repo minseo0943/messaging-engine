@@ -1,6 +1,6 @@
 # Dev environment overrides
 global:
-  imageTag: dev
+  imageTag: e70248447f3a55195e57afc2bfe8781c256f9c83
 
 services:
   gateway:
