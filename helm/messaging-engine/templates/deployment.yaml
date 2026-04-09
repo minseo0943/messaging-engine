@@ -70,11 +70,22 @@ spec:
               port: {{ $svc.val.port }}
             initialDelaySeconds: {{ $probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ $probes.readiness.periodSeconds }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: {{ $svc.val.port }}
             initialDelaySeconds: {{ $probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ $probes.liveness.periodSeconds }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
 {{- end }}
 {{- end }}
