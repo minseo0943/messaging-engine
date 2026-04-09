@@ -12,6 +12,7 @@ on:
           - smoke
           - e2e
           - spike
+          - soak
       duration:
         description: 'Override test duration (e.g., 30s, 1m)'
         required: false
@@ -142,6 +143,19 @@ jobs:
             --out json=load-test/results/spike-result.json \
             --summary-export=load-test/results/spike-summary.json \
             load-test/spike-test.js
+        continue-on-error: true
+
+      - name: Run K6 Soak Test
+        if: github.event.inputs.scenario == 'soak'
+        run: |
+          k6 run \
+            --env BASE_URL=http://localhost:8080 \
+            --env CHAT_URL=http://localhost:8081 \
+            --env QUERY_URL=http://localhost:8082 \
+            --env PRESENCE_URL=http://localhost:8083 \
+            --out json=load-test/results/soak-result.json \
+            --summary-export=load-test/results/soak-summary.json \
+            load-test/soak-test.js
         continue-on-error: true
 
       - name: Upload K6 results
