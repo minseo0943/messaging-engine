@@ -1,0 +1,59 @@
+# Production environment overrides
+global:
+  imageTag: stable
+  imagePullPolicy: Always
+
+services:
+  gateway:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+  chat:
+    replicas: 3
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+  query:
+    replicas: 2
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+  presence:
+    replicas: 2
+  notification:
+    replicas: 2
+
+# Production: use managed services (disable in-cluster infra)
+infra:
+  mysql:
+    enabled: false
+    host: mysql.rds.amazonaws.com
+  mongodb:
+    enabled: false
+    host: mongodb.atlas.example.com
+  redis:
+    enabled: false
+    host: redis.elasticache.amazonaws.com
+  kafka:
+    enabled: false
+    bootstrapServers: kafka-broker-1:9092,kafka-broker-2:9092,kafka-broker-3:9092
+  elasticsearch:
+    enabled: false
+    host: elasticsearch.es.amazonaws.com
+
+config:
+  esEnabled: "true"
+  tracingEnabled: "true"

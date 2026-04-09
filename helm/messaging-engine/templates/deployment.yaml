@@ -1,0 +1,80 @@
+{{- $global := .Values.global -}}
+{{- $probes := .Values.probes -}}
+{{- $services := list
+  (dict "key" "gateway" "val" .Values.services.gateway)
+  (dict "key" "chat" "val" .Values.services.chat)
+  (dict "key" "query" "val" .Values.services.query)
+  (dict "key" "presence" "val" .Values.services.presence)
+  (dict "key" "notification" "val" .Values.services.notification)
+  (dict "key" "ai" "val" .Values.services.ai)
+-}}
+{{- range $svc := $services }}
+{{- if $svc.val.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.val.name }}
+  namespace: {{ $global.namespace }}
+  labels:
+    app: {{ $svc.val.name }}
+    app.kubernetes.io/part-of: messaging-engine
+spec:
+  replicas: {{ $svc.val.replicas }}
+  selector:
+    matchLabels:
+      app: {{ $svc.val.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $svc.val.name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $svc.val.port | quote }}
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      {{- if and (hasKey $svc.val "initContainers") $svc.val.initContainers }}
+      initContainers:
+        {{- if $svc.val.initContainers.waitForMySQL }}
+        - name: wait-for-mysql
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z mysql 3306; do echo "Waiting for MySQL..."; sleep 3; done']
+        {{- end }}
+        {{- if $svc.val.initContainers.waitForKafka }}
+        - name: wait-for-kafka
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z kafka 9092; do echo "Waiting for Kafka..."; sleep 3; done']
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $svc.val.name }}
+          image: {{ $global.imageRegistry }}/{{ $svc.val.name }}:{{ $global.imageTag }}
+          imagePullPolicy: {{ $global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $svc.val.port }}
+          envFrom:
+            - configMapRef:
+                name: messaging-config
+            - secretRef:
+                name: messaging-secrets
+          resources:
+            requests:
+              cpu: {{ $svc.val.resources.requests.cpu }}
+              memory: {{ $svc.val.resources.requests.memory }}
+            limits:
+              cpu: {{ $svc.val.resources.limits.cpu }}
+              memory: {{ $svc.val.resources.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ $svc.val.port }}
+            initialDelaySeconds: {{ $probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $probes.readiness.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: {{ $svc.val.port }}
+            initialDelaySeconds: {{ $probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $probes.liveness.periodSeconds }}
+{{- end }}
+{{- end }}

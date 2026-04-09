@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: messaging-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "messaging-engine.labels" . | nindent 4 }}
+data:
+  SPRING_PROFILES_ACTIVE: {{ .Values.global.springProfile | quote }}
+  MYSQL_HOST: {{ .Values.infra.mysql.host | quote }}
+  MYSQL_PORT: {{ .Values.infra.mysql.port | quote }}
+  MONGO_HOST: {{ .Values.infra.mongodb.host | quote }}
+  MONGO_PORT: {{ .Values.infra.mongodb.port | quote }}
+  REDIS_HOST: {{ .Values.infra.redis.host | quote }}
+  REDIS_PORT: {{ .Values.infra.redis.port | quote }}
+  KAFKA_BOOTSTRAP_SERVERS: {{ .Values.infra.kafka.bootstrapServers | quote }}
+  ES_HOST: {{ .Values.infra.elasticsearch.host | quote }}
+  ES_PORT: {{ .Values.infra.elasticsearch.port | quote }}
+  ES_ENABLED: {{ .Values.config.esEnabled | quote }}
+  TRACING_ENABLED: {{ .Values.config.tracingEnabled | quote }}
+  JAEGER_HOST: {{ .Values.config.jaegerHost | quote }}
+  CHAT_SERVICE_HOST: {{ .Values.services.chat.name | quote }}
+  QUERY_SERVICE_HOST: {{ .Values.services.query.name | quote }}
+  PRESENCE_SERVICE_HOST: {{ .Values.services.presence.name | quote }}
+  AI_SERVICE_HOST: {{ .Values.services.ai.name | quote }}
+  SLACK_ENABLED: {{ .Values.config.slackEnabled | quote }}
