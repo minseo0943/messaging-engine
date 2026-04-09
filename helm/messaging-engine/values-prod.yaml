@@ -13,6 +13,14 @@ services:
       limits:
         cpu: 1000m
         memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilization: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
   chat:
     replicas: 3
     resources:
@@ -22,6 +30,14 @@ services:
       limits:
         cpu: 1000m
         memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      targetCPUUtilization: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
   query:
     replicas: 2
     resources:
@@ -31,6 +47,14 @@ services:
       limits:
         cpu: 1000m
         memory: 512Mi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 4
+      targetCPUUtilization: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
   presence:
     replicas: 2
   notification:
@@ -53,6 +77,13 @@ infra:
   elasticsearch:
     enabled: false
     host: elasticsearch.es.amazonaws.com
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  interval: 15s
 
 config:
   esEnabled: "true"

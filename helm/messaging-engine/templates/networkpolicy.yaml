@@ -1,0 +1,218 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $global := .Values.global -}}
+# Default deny all ingress in namespace
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+# Gateway: 외부 트래픽 수신 허용
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: gateway-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - {} # 모든 소스에서 ingress 허용 (인터넷 → Gateway)
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: chat-service
+        - podSelector:
+            matchLabels:
+              app: query-service
+        - podSelector:
+            matchLabels:
+              app: presence-service
+        - podSelector:
+            matchLabels:
+              app: ai-service
+        - podSelector:
+            matchLabels:
+              app: redis
+    - to: # DNS 허용
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+
+# Chat Service: Gateway에서만 수신, MySQL + Kafka로 송신
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chat-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: chat-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway-service
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mysql
+        - podSelector:
+            matchLabels:
+              app: kafka
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+
+# Query Service: Gateway에서만 수신, MongoDB + Kafka + Elasticsearch로 송신
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: query-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: query-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway-service
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+        - podSelector:
+            matchLabels:
+              app: kafka
+        - podSelector:
+            matchLabels:
+              app: elasticsearch
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+
+# Presence Service: Gateway에서만 수신, Redis + Kafka로 송신
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: presence-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: presence-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway-service
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+        - podSelector:
+            matchLabels:
+              app: kafka
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+
+# Notification Service: Kafka Consumer only (ingress 불필요), Kafka + Redis로 송신
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: notification-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: notification-service
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+        - podSelector:
+            matchLabels:
+              app: redis
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+    - to: # Slack Webhook 외부 호출 허용
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP
+
+# AI Service: Gateway에서만 수신, Kafka로 송신
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-service-policy
+  namespace: {{ $global.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway-service
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - port: 53
+          protocol: UDP
+{{- end }}
