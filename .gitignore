@@ -38,3 +38,7 @@ docker-compose.override.yml
 
 # Redis
 dump.rdb
+
+# K6 load test results (generated)
+load-test/results/*.json
+!load-test/results/.gitkeep

@@ -79,8 +79,8 @@ chat-service에서 Kafka로 이벤트 발행 → query-service에서 MongoDB에 
 - [x] `query-service`: MessageQueryController (페이지네이션)
 - [x] Docker Compose: MongoDB 추가
 - [x] Kafka 토픽 자동 생성 설정 (KafkaProducerConfig에 NewTopic Bean)
-- [ ] Micrometer: Kafka Producer/Consumer 메트릭 노출
-- [ ] **Phase 2 측정**: CQRS 적용 후 쓰기/읽기 성능 비교 (docs/benchmarks/phase2-cqrs.md)
+- [x] Micrometer: Kafka Producer/Consumer 메트릭 노출
+- [x] **Phase 2 측정**: CQRS 적용 후 쓰기/읽기 성능 비교 (docs/benchmarks/phase2-cqrs.md)
 
 ### 검증
 - chat-service에서 메시지 전송 → query-service MongoDB에 반영 확인
@@ -103,7 +103,7 @@ Redis 기반 접속 상태 관리 + Slack Webhook 알림
 - [x] SlackWebhookSender (실제 Slack 연동, 설정으로 on/off)
 - [x] MockFcmSender, MockEmailSender (로그 출력)
 - [x] Docker Compose: Redis 추가
-- [ ] **Phase 3 측정**: Redis 캐시 적용 전/후 조회 레이턴시 (docs/benchmarks/phase3-presence.md)
+- [x] **Phase 3 측정**: Redis 캐시 적용 전/후 조회 레이턴시 (docs/benchmarks/phase3-presence.md)
 
 ### 검증
 - 메시지 전송 → Slack 채널에 알림 수신 확인
@@ -123,7 +123,7 @@ JWT 인증 + Rate Limiting + API 라우팅
 - [x] Redis 기반 Rate Limiting (Fixed Window Counter, INCR+EXPIRE, fail-open)
 - [x] 서비스 라우팅 (RestClient 프록시, GET/POST 모두 검증 완료)
 - [x] 모든 서비스 Gateway 경유하도록 설정 (ServiceRoute enum + GatewayProxyController)
-- [ ] **Phase 4 측정**: Gateway 오버헤드 + Rate Limiting 효과 (docs/benchmarks/phase4-gateway.md)
+- [x] **Phase 4 측정**: Gateway 오버헤드 + Rate Limiting 효과 (docs/benchmarks/phase4-gateway.md)
 
 ### 검증
 - JWT 없이 요청 → 401 Unauthorized
@@ -190,9 +190,9 @@ OpenTelemetry → Jaeger 트레이싱 + Grafana 대시보드 확장
 - [x] query-service 단위 테스트: MessageProjectionServiceTest (3건) — 멱등성 검증 포함
 - [x] gateway-service 단위 테스트: JwtTokenProviderTest (6건), ServiceRouteTest (8건)
 - [x] 전체 테스트 통과 확인 (총 55건, BDDMockito + ParameterizedTest)
-- [ ] K6 전체 시나리오: 메시지 전송 → CQRS → 알림 → AI 분석 E2E
-- [ ] spike-test.js: 스파이크 테스트 (10→500 VU 급증)
-- [ ] **최종 성능 보고서 작성** (docs/benchmarks/final-report.md)
+- [x] K6 전체 시나리오: 메시지 전송 → CQRS → 알림 → AI 분석 E2E
+- [x] spike-test.js: 스파이크 테스트 (10→500 VU 급증)
+- [x] **최종 성능 보고서 작성** (docs/benchmarks/final-report.md)
 
 ### 검증
 - 최종 성능 수치 확정
@@ -210,8 +210,8 @@ GitHub Actions 풀 파이프라인 + K8s manifests + 포트폴리오 README
 - [x] 각 서비스 Dockerfile (멀티스테이지 빌드, non-root 사용자)
 - [x] ADR 문서 5건 작성 (docs/adr/)
 - [x] README.md (아키텍처 다이어그램, 기술 결정, 실행 방법, 모니터링)
-- [ ] `k8s/`: Deployment, Service, ConfigMap per service
-- [ ] `k8s/`: Namespace, Ingress
+- [x] `k8s/`: Deployment, Service, ConfigMap per service
+- [x] `k8s/`: Namespace, Ingress
 
 ### 검증
 - PR 올리면 CI 파이프라인 자동 실행 확인
@@ -258,10 +258,10 @@ docs/troubleshooting/
 
 ### 벤치마크
 - [x] docs/benchmarks/phase1-baseline.md
-- [ ] docs/benchmarks/phase2-cqrs.md
-- [ ] docs/benchmarks/phase3-presence.md
-- [ ] docs/benchmarks/phase4-gateway.md
-- [ ] docs/benchmarks/final-report.md (Phase 1~7 전체 비교)
+- [x] docs/benchmarks/phase2-cqrs.md
+- [x] docs/benchmarks/phase3-presence.md
+- [x] docs/benchmarks/phase4-gateway.md
+- [x] docs/benchmarks/final-report.md (Phase 1~7 전체 비교)
 
 ### ADR
 - [x] docs/adr/001-cqrs-eventual-consistency.md
@@ -271,7 +271,7 @@ docs/troubleshooting/
 - [x] docs/adr/005-gateway-restclient-proxy.md
 
 ### 트러블슈팅
-- [ ] docs/troubleshooting/ (Phase 진행하며 실제 이슈 기록)
+- [x] docs/troubleshooting/ (Phase 진행하며 실제 이슈 기록)
 
 ### 최종
-- [ ] README.md (아키텍처, 성능, 기술 결정, 장애 대응)
+- [x] README.md (아키텍처, 성능, 기술 결정, 장애 대응)
