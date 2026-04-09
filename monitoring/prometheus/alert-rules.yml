@@ -157,3 +157,50 @@ groups:
         annotations:
           summary: "{{ $labels.job }} HikariCP 커넥션 풀 대기 발생"
           description: "{{ $labels.job }}에서 DB 커넥션 대기가 3분 이상 지속 중입니다."
+
+  # ──────────────── Dead Letter Topic ────────────────
+  - name: dlt_alerts
+    rules:
+      - alert: DltMessageVolumeWarning
+        expr: sum(increase(messaging_dlt_consumed_total[10m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLT 메시지 10분간 5건 초과 감지"
+          description: "최근 10분간 DLT로 전송된 메시지: {{ $value }}건. 이벤트 처리 실패 원인 확인 필요."
+
+      - alert: DltMessageVolumeCritical
+        expr: sum(increase(messaging_dlt_consumed_total[10m])) > 50
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DLT 메시지 10분간 50건 초과 — 대규모 처리 실패"
+          description: "최근 10분간 DLT 메시지: {{ $value }}건. 즉시 확인 필요."
+
+  # ──────────────── 비즈니스 메트릭 ────────────────
+  - name: business_alerts
+    rules:
+      - alert: NoMessagesReceived
+        expr: sum(rate(messaging_event_end_to_end_lag_seconds_count[10m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "10분간 메시지 이벤트 수신 없음"
+          description: "Kafka 파이프라인 중단 가능성. 서비스 상태를 확인하세요."
+
+      - alert: HighDltRatio
+        expr: |
+          (
+            sum(rate(messaging_dlt_consumed_total[5m]))
+            /
+            sum(rate(messaging_event_end_to_end_lag_seconds_count[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLT 비율 5% 초과 — 이벤트 처리 안정성 저하"
+          description: "전체 이벤트 대비 DLT 비율: {{ $value | humanizePercentage }}"
