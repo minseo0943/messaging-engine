@@ -33,7 +33,17 @@ public class IdempotentEventProcessor {
             log.warn("Redis 멱등성 체크 실패, 처리 진행 [eventId={}]: {}", eventId, e.getMessage());
         }
 
-        processor.run();
+        try {
+            processor.run();
+        } catch (Exception e) {
+            // 처리 실패 시 Redis 키 삭제 → 재시도 허용
+            try {
+                redisTemplate.delete(key);
+            } catch (Exception deleteEx) {
+                log.warn("Redis 키 삭제 실패 (TTL 만료 시 자동 해제) [key={}]: {}", key, deleteEx.getMessage());
+            }
+            throw e;
+        }
         return true;
     }
 }

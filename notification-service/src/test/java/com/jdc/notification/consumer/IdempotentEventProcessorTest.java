@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -76,5 +77,24 @@ class IdempotentEventProcessorTest {
         // Then
         assertThat(result).isTrue();
         assertThat(executed.get()).isTrue();
+    }
+
+    @Test
+    @DisplayName("processor 실패 시 Redis 키를 삭제하고 예외를 전파하는 테스트")
+    void processIfNew_shouldDeleteKeyAndRethrow_whenProcessorFails() {
+        // Given
+        given(redisTemplate.opsForValue()).willReturn(valueOps);
+        given(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).willReturn(true);
+        given(redisTemplate.delete(anyString())).willReturn(true);
+
+        // When & Then
+        assertThatThrownBy(() ->
+                processor.processIfNew("event-1", "test-consumer", () -> {
+                    throw new RuntimeException("Processing failed");
+                })
+        ).isInstanceOf(RuntimeException.class)
+                .hasMessage("Processing failed");
+
+        then(redisTemplate).should().delete(anyString());
     }
 }
