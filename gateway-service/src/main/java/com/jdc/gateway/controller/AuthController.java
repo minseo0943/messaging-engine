@@ -48,6 +48,9 @@ public class AuthController {
 
         Long userId = jwtTokenProvider.getUserId(refreshToken);
         String username = jwtTokenProvider.getUsername(refreshToken);
+        if (userId == null || username == null) {
+            return ApiResponse.error("토큰에서 사용자 정보를 추출할 수 없습니다");
+        }
 
         // Refresh Token Rotation: 저장된 토큰과 비교
         if (!refreshTokenStore.validate(userId, refreshToken)) {
@@ -92,8 +95,21 @@ public class AuthController {
             return ApiResponse.error("Kakao OAuth가 비활성화되어 있습니다");
         }
 
-        KakaoOAuthService.KakaoTokenResponse kakaoToken = kakaoOAuthService.getAccessToken(code);
-        KakaoOAuthService.KakaoUserInfo userInfo = kakaoOAuthService.getUserInfo(kakaoToken.accessToken());
+        KakaoOAuthService.KakaoTokenResponse kakaoToken;
+        try {
+            kakaoToken = kakaoOAuthService.getAccessToken(code);
+        } catch (Exception e) {
+            log.error("Kakao 토큰 발급 실패: {}", e.getMessage());
+            return ApiResponse.error("Kakao 인증에 실패했습니다");
+        }
+
+        KakaoOAuthService.KakaoUserInfo userInfo;
+        try {
+            userInfo = kakaoOAuthService.getUserInfo(kakaoToken.accessToken());
+        } catch (Exception e) {
+            log.error("Kakao 사용자 정보 조회 실패: {}", e.getMessage());
+            return ApiResponse.error("Kakao 사용자 정보를 가져올 수 없습니다");
+        }
 
         String accessToken = jwtTokenProvider.generateAccessToken(userInfo.kakaoId(), userInfo.nickname());
         String refreshToken = jwtTokenProvider.generateRefreshToken(userInfo.kakaoId(), userInfo.nickname());

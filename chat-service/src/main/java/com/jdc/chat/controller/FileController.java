@@ -24,6 +24,9 @@ public class FileController {
     public ApiResponse<PresignedUrlResponse> getUploadUrl(
             @RequestParam String fileName,
             @RequestParam(defaultValue = "application/octet-stream") String contentType) {
+        if (fileName == null || fileName.isBlank() || fileName.contains("..") || fileName.contains("/") || fileName.contains("\\")) {
+            throw new IllegalArgumentException("유효하지 않은 파일명입니다");
+        }
         FileUploadService.PresignedUrlResult result = fileUploadService.generateUploadUrl(fileName, contentType);
         return ApiResponse.ok(new PresignedUrlResponse(result.uploadUrl(), result.objectKey()));
     }
